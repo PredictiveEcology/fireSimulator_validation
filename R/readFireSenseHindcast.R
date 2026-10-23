@@ -83,7 +83,7 @@ readHindcastObserved <- function(rec, hindcastDir, elf, scored, minHa = 50) {
                   do.call(rbind, lapply(oc, function(x) as.data.frame(x$counts)[, c("year", "ignitions", "nFires50")])))
   names(counts)[names(counts) == "nFires50"] <- "escapes"             # an escape is a fire of minHa or more
   sizes <- rbind(as.data.frame(rec$sizes)[!rec$sizes$year %in% scored, c("year", "cause", "ha")],
-                 do.call(rbind, Map(function(x, y) data.frame(year = y, cause = x$sizes$cause, ha = x$sizes$ha), oc, scored)))
+                 do.call(rbind, Map(function(x, y) data.frame(year = rep(y, NROW(x$sizes)), cause = x$sizes$cause, ha = x$sizes$ha), oc, scored)))
   sizes <- sizes[!is.na(sizes$ha), ]                      # a year without fire is one NA row in the record
   nat <- sizes[sizes$cause == "natural" & sizes$ha >= minHa, ]
   counts <- counts[order(counts$year), ]
