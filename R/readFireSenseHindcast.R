@@ -82,6 +82,14 @@ readHindcastObserved <- function(rec, hindcastDir, elf, scored, minHa = 50) {
   counts <- rbind(as.data.frame(rec$counts)[!rec$counts$year %in% scored, c("year", "ignitions", "nFires50")],
                   do.call(rbind, lapply(oc, function(x) as.data.frame(x$counts)[, c("year", "ignitions", "nFires50")])))
   names(counts)[names(counts) == "nFires50"] <- "escapes"             # an escape is a fire of minHa or more
+  ## escapes come from burned-area polygons, ignitions from ignition points; a year can have more of the
+  ## former (6.3.2: 5 years), which no escape-rate model can fit, so cap escapes at ignitions
+  over <- which(counts$escapes > counts$ignitions)
+  if (length(over)) {
+    message(elf, ": ", length(over), " record year(s) with more escapes (fires >= ", minHa,
+            " ha) than ignitions; escapes capped at ignitions for the escape rate")
+    counts$escapes[over] <- counts$ignitions[over]
+  }
   sizes <- rbind(as.data.frame(rec$sizes)[!rec$sizes$year %in% scored, c("year", "cause", "ha")],
                  do.call(rbind, Map(function(x, y) data.frame(year = rep(y, NROW(x$sizes)), cause = x$sizes$cause, ha = x$sizes$ha), oc, scored)))
   sizes <- sizes[!is.na(sizes$ha), ]                      # a year without fire is one NA row in the record
