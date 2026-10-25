@@ -5,18 +5,18 @@
 
 #' N0: shuffled years
 #'
-#' Scores the model's ensembles against other years' observations. Returns, for each year, the mean loss over
+#' Scores the model's ensembles against other years' observations. Returns, for each year, the median loss over
 #' `nShuffle` random assignments of ensembles to years (a derangement is not forced; with few years some shuffles
 #' leave a year in place, which only raises the floor slightly).
 #'
 #' @param simEns List (one element per year) of ensembles. @param obs Observed value per year.
 #' @param lossFun `function(ensemble, y)`. @param nShuffle Number of shuffles.
-#' @return Mean loss per year.
+#' @return Median loss per year.
 nullShuffled <- function(simEns, obs, lossFun = crpsEnsemble, nShuffle = 50L, seed = 1L) {
   n <- length(obs)
   withSeed(seed, {
     perms <- replicate(nShuffle, sample.int(n), simplify = FALSE)
-    vapply(seq_len(n), function(i) mean(vapply(perms, function(p) lossFun(simEns[[p[i]]], obs[i]), 0)), 0)
+    vapply(seq_len(n), function(i) stats::median(vapply(perms, function(p) lossFun(simEns[[p[i]]], obs[i]), 0)), 0)
   })
 }
 

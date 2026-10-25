@@ -71,14 +71,14 @@ test_that("bootstrapSkill: perfect model pooled over ELFs has skill 1 and an int
 
 test_that("bootstrapRankDiff: a model that ranks years right beats an index that does not", {
   set.seed(2)
-  d <- do.call(rbind, lapply(c("a", "b", "c"), function(e) { o <- rnorm(10); data.frame(ELF = e, year = 1:10, obs = o, simMean = o + rnorm(10, 0, 0.1), ref = rnorm(10)) }))
+  d <- do.call(rbind, lapply(c("a", "b", "c"), function(e) { o <- rnorm(10); data.frame(ELF = e, year = 1:10, obs = o, simMedian = o + rnorm(10, 0, 0.1), ref = rnorm(10)) }))
   b <- bootstrapRankDiff(d, nBoot = 199)
   expect_equal(b$measure, c("rhoModel", "rhoIndex", "rhoDiff"))
   expect_gt(b$value[1], 0.8); expect_gt(b$value[3], 0.4); expect_gt(b$lo[3], 0)
 })
 
 test_that("scoreRanking: monotone model has rho 1 and a small permutation p", {
-  d <- data.table::data.table(year = 1:8, obs = c(3, 1, 4, 1.5, 9, 2.6, 5, 3.5), simMean = c(3, 1, 4, 1.5, 9, 2.6, 5, 3.5) * 2)
+  d <- data.table::data.table(year = 1:8, obs = c(3, 1, 4, 1.5, 9, 2.6, 5, 3.5), simMedian = c(3, 1, 4, 1.5, 9, 2.6, 5, 3.5) * 2)
   r <- scoreRanking(d, data.table::data.table(year = 1:8, value = rev(1:8)), nPerm = 999)
   expect_equal(r$rho, 1); expect_lt(r$pPerm, 0.01); expect_equal(r$nYears, 8)
 })

@@ -25,7 +25,7 @@ obsBy <- function(elf, col, years) elf$obsYears[[col]][match(years, elf$obsYears
 
 #' S1: ignitions per year
 #'
-#' CRPS on log(1 + ignitions). N1: the ELF's own history, all years. N2: negative binomial GLM on the ELF-mean covariate.
+#' CRPS on log(1 + ignitions). N1: the ELF's own history, all years. N2: negative binomial GLM on the ELF-median covariate.
 #' Calibration: coverage of the 50% and 90% intervals, and the log score of the observation under a distribution fitted to
 #' the simulated ensemble (`logScore`, negative binomial).
 #' @param elf ELF input list. @param K Ensemble size of the fitted nulls. @return `list(scores, cal)`.
@@ -103,14 +103,14 @@ scoreS4 <- function(elf, nNull = 199, nShuffle = 50L, adFun = fireSenseUtils:::a
 
 #' S5: ranking of years
 #'
-#' Spearman of the model's mean annual area (fires of 50 ha or more) against the observed area, with the permutation floor
+#' Spearman of the model's median annual area (fires of 50 ha or more) against the observed area, with the permutation floor
 #' (N0) and the index's own Spearman (N2: the covariate against the observed area).
 #' @param elf ELF input list. @param nPerm Permutations.
 #' @return One-row `data.frame(nYears, rho, pPerm, rhoIndex, rhoDiff)`, and the per-year table as attribute `years`.
 scoreS5 <- function(elf, nPerm = 9999) {
   yrs <- scoredYears(elf)
   d <- data.frame(year = yrs, obs = obsBy(elf, "area50", yrs),
-                  simMean = vapply(simBy(elf, "area50", yrs), mean, 0), ref = covariateOf(elf, yrs))
+                  simMedian = vapply(simBy(elf, "area50", yrs), stats::median, 0), ref = covariateOf(elf, yrs))
   r <- as.data.frame(scoreRanking(data.table::as.data.table(d), elf$covariate, nPerm))
   names(r)[names(r) == "rhoRef"] <- "rhoIndex"
   r$rhoDiff <- r$rho - r$rhoIndex

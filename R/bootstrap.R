@@ -33,28 +33,32 @@ bootstrapSkill <- function(d, nBoot = 999, seed = 1) {
   data.frame(skill = b$est, lo = b$lo, hi = b$hi, nELF = length(unique(d$ELF)), nUnits = nrow(d))
 }
 
-#' Pooled mean of a per-unit value (coverage, log score) with its bootstrap interval
+#' Pooled summary of a per-unit value with its bootstrap interval: the median (log score), or the share for 0/1 values (coverage)
 #'
 #' @param d `data.frame(ELF, year, value)`. @inheritParams bootstrapPooled
+## the share of 0/1 values (coverage: the fraction of units inside a band), else the median (central tendency is
+## always the median in these tests)
+pooledValue <- function(x) if (all(x %in% c(0, 1))) sum(x) / length(x) else stats::median(x)
+
 bootstrapMean <- function(d, nBoot = 999, seed = 1) {
   d <- d[is.finite(d$value), , drop = FALSE]
   if (!nrow(d)) return(data.frame(value = NA_real_, lo = NA_real_, hi = NA_real_, nELF = 0L, nUnits = 0L))
-  b <- bootstrapPooled(d, function(df) mean(df$value), nBoot, seed)
+  b <- bootstrapPooled(d, function(df) pooledValue(df$value), nBoot, seed)
   data.frame(value = b$est, lo = b$lo, hi = b$hi, nELF = length(unique(d$ELF)), nUnits = nrow(d))
 }
 
 #' Pooled Spearman of the model and of an index, and the paired difference, with a bootstrap interval
 #'
-#' The statistic is the mean over ELFs of the ELF's Spearman correlations. Model and index are resampled on the same
+#' The statistic is the median over ELFs of the ELF's Spearman correlations. Model and index are resampled on the same
 #' years, so the difference is paired.
 #'
-#' @param d `data.frame(ELF, year, obs, simMean, ref)`. @inheritParams bootstrapPooled
+#' @param d `data.frame(ELF, year, obs, simMedian, ref)`. @inheritParams bootstrapPooled
 #' @return `data.frame(measure = c("rhoModel", "rhoIndex", "rhoDiff"), value, lo, hi)`.
 bootstrapRankDiff <- function(d, nBoot = 999, seed = 1) {
   rho <- function(a, b) if (length(a) > 2 && stats::sd(a) > 0 && stats::sd(b) > 0) stats::cor(a, b, method = "spearman") else NA_real_
   stat <- function(df) {
-    r <- do.call(rbind, lapply(split(df, df$ELF), function(x) c(rho(x$obs, x$simMean), rho(x$obs, x$ref))))
-    c(mean(r[, 1], na.rm = TRUE), mean(r[, 2], na.rm = TRUE), mean(r[, 1] - r[, 2], na.rm = TRUE))
+    r <- do.call(rbind, lapply(split(df, df$ELF), function(x) c(rho(x$obs, x$simMedian), rho(x$obs, x$ref))))
+    c(stats::median(r[, 1], na.rm = TRUE), stats::median(r[, 2], na.rm = TRUE), stats::median(r[, 1] - r[, 2], na.rm = TRUE))
   }
   b <- bootstrapPooled(d[is.finite(d$ref), , drop = FALSE], stat, nBoot, seed)
   data.frame(measure = c("rhoModel", "rhoIndex", "rhoDiff"), value = b$est, lo = b$lo, hi = b$hi)

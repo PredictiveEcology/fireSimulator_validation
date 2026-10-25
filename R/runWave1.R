@@ -3,7 +3,7 @@
 #' Wave 1 of the hindcast test plan
 #'
 #' Gates G1-G6 per ELF; skill tests S1-S5 against the nulls N0 (floor), N1 (the ELF's own history) and N2 (regression on
-#' the ELF-mean covariate), all fitted in-sample on the same years, scored year included. Verdicts are pooled over ELFs
+#' the ELF-median covariate), all fitted in-sample on the same years, scored year included. Verdicts are pooled over ELFs
 #' with a bootstrap over ELFs and years (`verdict`: the interval of the skill, or of the Spearman difference to the index, against 0,
 #' for N1 and N2 only; N0 is a floor); per-ELF numbers are reported, not judged.
 #'
@@ -15,7 +15,7 @@
 #'   \item `simSizes`: `data.frame(year, run, ha)`, simulated fire sizes.
 #'   \item `obsYears`: `data.frame(year, ignitions, escapes, area50)`, the observed record, every year (scored years included).
 #'   \item `obsSizes`: `data.frame(year, ha)`, observed fire sizes, every year.
-#'   \item `covariate`: `data.frame(year, value)`, the ELF mean of the fit's climate covariate, every year.
+#'   \item `covariate`: `data.frame(year, value)`, the ELF median of the fit's climate covariate, every year.
 #'   \item `fit`: list with `objective` (ledger objective values), `pipelineObjective` (the same objective recomputed by the
 #'     pipeline, per replicate; `NULL` if not available), `pc` (`p_c` of each kept set) and `p50`, `fitAreaHa` (area of the
 #'     fires the fit used) and `totalAreaHa` (observed area).
@@ -57,7 +57,7 @@ runWave1 <- function(elfs, nBoot = 999, nNull = 199, nPerm = 9999, seed = 1, adF
     do.call(rbind, lapply(intersect(c("cover50", "cover90", "logScore"), names(d)), function(m) {
       x <- data.frame(ELF = d$ELF, year = d$year, value = as.numeric(d[[m]]))
       p <- bootstrapMean(x, nBoot, seed)
-      perE <- do.call(rbind, lapply(split(x, x$ELF), function(z) data.frame(level = "ELF", ELF = z$ELF[1], value = mean(z$value),
+      perE <- do.call(rbind, lapply(split(x, x$ELF), function(z) data.frame(level = "ELF", ELF = z$ELF[1], value = pooledValue(z$value),
                 lo = NA_real_, hi = NA_real_, nELF = 1L, nUnits = nrow(z))))
       rbind(data.frame(level = "pooled", ELF = "all", p), perE) |> transform(test = tst, null = NA_character_, measure = m)
     }))

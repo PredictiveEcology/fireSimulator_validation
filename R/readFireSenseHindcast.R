@@ -100,7 +100,7 @@ readHindcastObserved <- function(rec, hindcastDir, elf, scored, minHa = 50) {
   list(obsYears = counts, obsSizes = nat[, c("year", "ha")], nbacAreaHa = sum(all$ha), fitAreaHa = sum(all$ha[all$ha >= minHa]))
 }
 
-#' ELF mean of the fit's climate covariate (CMD) for every year of the record
+#' ELF median of the fit's climate covariate (CMD) for every year of the record
 #'
 #' Reads `climate/CMD_historical_<ELF>.tif` (one layer per year) from the first set that has it and averages it over the core.
 #' @param hindcastDir,elf As above. @param core [hindcastCore()]. @param variable Climate variable of the fit.
@@ -110,7 +110,7 @@ readHindcastCovariate <- function(hindcastDir, elf, core, variable = "CMD") {
   r <- terra::rast(f)
   cr <- terra::crop(r, terra::ext(core))
   m <- if (terra::compareGeom(cr, core, stopOnError = FALSE)) core else terra::resample(core, cr, "near")
-  v <- terra::global(terra::mask(cr, m), "mean", na.rm = TRUE)[[1]]
+  v <- apply(terra::values(terra::mask(cr, m)), 2, stats::median, na.rm = TRUE)
   data.frame(year = as.integer(sub(".*_(\\d{4})$", "\\1", names(r))), value = v)
 }
 

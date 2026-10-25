@@ -8,25 +8,35 @@ inRatio <- function(r, lo = 0.25, hi = 4) is.finite(r) & r >= lo & r <= hi
 #'
 #' @param pipeline Objective values computed by the scoring pipeline, one per replicate (parameter set or rep).
 #' @param ledger The fit's recorded objective (`objFunVal` of the ledger): one value, or one per kept set.
-#' @return Passes when the ledger's mean lies within two standard errors of the pipeline mean. `value` is
-#'   `mean(pipeline) - mean(ledger)`.
+#' @return Passes when the ledger's median lies within the 2.5-97.5% range of the pipeline's replicates. `value` is
+#'   `median(pipeline) - median(ledger)`. (Medians, not means, throughout the tests: one runaway replicate moves a mean.)
 gateG1 <- function(pipeline, ledger) {
   pipeline <- pipeline[is.finite(pipeline)]; ledger <- ledger[is.finite(ledger)]
   if (length(pipeline) < 2L || !length(ledger)) return(gateRow("G1", NA, NA_real_, "pipeline objective not available"))
-  d <- mean(pipeline) - mean(ledger); se <- stats::sd(pipeline) / sqrt(length(pipeline))
-  gateRow("G1", abs(d) <= 2 * se, d, sprintf("difference %.3g, 2 x replicate SE %.3g", d, 2 * se))
+  d <- stats::median(pipeline) - stats::median(ledger); q <- stats::quantile(pipeline, c(0.025, 0.975), names = FALSE)
+  gateRow("G1", stats::median(ledger) >= q[1] && stats::median(ledger) <= q[2], d,
+          sprintf("difference %.3g; replicate 2.5-97.5%% range %.4g-%.4g", d, q[1], q[2]))
 }
 
-#' G2: whole-ELF mean annual area burned within 0.25-4x of the observation
+## one value per run: each run's simulated sizes or totals, so the median is taken over runs
+perRun <- function(x, value, fun = sum) {
+  if (!"run" %in% names(x)) x$run <- 1L
+  if (!nrow(x)) return(numeric(0))
+  as.numeric(tapply(x[[value]], x$run, fun))
+}
+
+#' G2: whole-ELF area burned over the scored years within 0.25-4x of the observation
+#'
+#' Each run's total area over the scored years; the median run is compared with the observed total over the same years.
 #'
 #' @param simYears `data.frame(year, run, area50)`: simulated annual area (ha, fires >= 50 ha) per run.
 #' @param obsYears `data.frame(year, area50)`: observed annual area.
 #' @param years Years compared (default: the simulated years).
 gateG2 <- function(simYears, obsYears, years = unique(simYears$year)) {
-  sim <- mean(vapply(years, function(y) mean(simYears$area50[simYears$year == y]), 0))
-  obs <- mean(obsYears$area50[obsYears$year %in% years])
+  sim <- stats::median(perRun(simYears[simYears$year %in% years, , drop = FALSE], "area50"))
+  obs <- sum(obsYears$area50[obsYears$year %in% years])
   r <- if (obs > 0) sim / obs else if (sim == 0) 1 else Inf
-  gateRow("G2", inRatio(r), r, sprintf("simulated %.0f ha/yr, observed %.0f ha/yr", sim, obs))
+  gateRow("G2", inRatio(r), r, sprintf("median run %.0f ha, observed %.0f ha, over %d years", sim, obs, length(years)))
 }
 
 #' G3: the fit's fire set carries at least half of the observed area
@@ -40,14 +50,20 @@ gateG3 <- function(fitAreaHa, totalAreaHa) {
 
 #' G4: the largest simulated fire is within 10x of the largest observed fire
 #'
-#' @param simSizes `data.frame(ha)`: simulated fire sizes. @param obsSizes `data.frame(ha)`: observed sizes (whole record).
-#' @return `value` = largest simulated / largest observed; the share of simulated area in fires over 100 kha is in
+#' Each run's largest fire over the scored years; the median run is compared with the largest observed fire in the same
+#' years (all observed years when `obsSizes` has no `year`).
+#'
+#' @param simSizes `data.frame(year, run, ha)`: simulated fire sizes. @param obsSizes `data.frame(year, ha)`: observed sizes.
+#' @return `value` = median run's largest / largest observed; the share of simulated area in fires over 100 kha is in
 #'   `detail` and in the extra column `share100kha`.
 gateG4 <- function(simSizes, obsSizes) {
-  r <- max(simSizes$ha, 0) / max(obsSizes$ha, 0)
+  if ("year" %in% names(simSizes) && "year" %in% names(obsSizes)) obsSizes <- obsSizes[obsSizes$year %in% unique(simSizes$year), , drop = FALSE]
+  simMax <- if (nrow(simSizes)) stats::median(perRun(simSizes, "ha", max)) else 0
+  obsMax <- max(obsSizes$ha, 0)
+  r <- simMax / obsMax
   share <- if (sum(simSizes$ha) > 0) sum(simSizes$ha[simSizes$ha > 1e5]) / sum(simSizes$ha) else 0
-  out <- gateRow("G4", is.finite(r) && r <= 10, r, sprintf("largest simulated %.0f ha, largest observed %.0f ha, %.1f%% of simulated area in fires over 100 kha",
-                  max(simSizes$ha, 0), max(obsSizes$ha, 0), 100 * share))
+  out <- gateRow("G4", is.finite(r) && r <= 10, r, sprintf("largest fire of the median run %.0f ha, largest observed %.0f ha, %.1f%% of simulated area in fires over 100 kha",
+                  simMax, obsMax, 100 * share))
   out$share100kha <- share; out
 }
 
@@ -61,17 +77,18 @@ gateG5 <- function(pc, p50) {
 
 #' G6: chain ignitions x escape rate x area per escape
 #'
-#' Each link, simulated over observed on the scored years, must be within 0.25-4x; the failing link is named.
+#' Each link, the median run's value over observed on the scored years, must be within 0.25-4x; the failing link is named.
 #'
 #' @param simYears `data.frame(year, run, ignitions, escapes, area50)`. @param obsYears `data.frame(year, ignitions, escapes, area50)`.
 #' @return `value` = the link ratio furthest from 1 (on the log scale); `detail` lists the three ratios and names the failing links.
 gateG6 <- function(simYears, obsYears, years = unique(simYears$year)) {
   s <- simYears[simYears$year %in% years, ]; o <- obsYears[obsYears$year %in% years, ]
-  nRun <- length(unique(s$run))
-  link <- function(sNum, sDen, oNum, oDen) (sNum / sDen) / (oNum / oDen)
-  ratios <- c(ignitions = (sum(s$ignitions) / nRun) / sum(o$ignitions),
-              escapeRate = link(sum(s$escapes), sum(s$ignitions), sum(o$escapes), sum(o$ignitions)),
-              areaPerEscape = link(sum(s$area50), sum(s$escapes), sum(o$area50), sum(o$escapes)))
+  ## each run's totals over the scored years, then the median run's link
+  ign <- perRun(s, "ignitions"); esc <- perRun(s, "escapes"); area <- perRun(s, "area50")
+  med <- function(x) { x <- x[is.finite(x)]; if (length(x)) stats::median(x) else NA_real_ }
+  ratios <- c(ignitions = med(ign) / sum(o$ignitions),
+              escapeRate = med(esc / ign) / (sum(o$escapes) / sum(o$ignitions)),
+              areaPerEscape = med(area / esc) / (sum(o$area50) / sum(o$escapes)))
   ratios[!is.finite(ratios)] <- NA_real_
   ok <- inRatio(ratios)
   failing <- names(ratios)[!ok]

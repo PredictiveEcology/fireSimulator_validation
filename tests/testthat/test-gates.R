@@ -46,3 +46,16 @@ test_that("runGates flags an ELF whose G2 or G3 fails", {
   g <- runGates(e); expect_false(attr(g, "meaningful")); expect_false(g$pass[g$gate == "G3"])
   expect_equal(g$gate, paste0("G", 1:6))
 })
+
+test_that("gates summarise runs by the median: one runaway run does not move them", {
+  sim <- data.frame(year = rep(1:2, each = 3), run = rep(1:3, 2), area50 = c(100, 200, 300, 100, 200, 300))
+  obs <- data.frame(year = 1:2, area50 = c(200, 200))
+  runaway <- sim; runaway$area50[runaway$run == 3] <- 1e7
+  expect_equal(gateG2(runaway, obs)$value, gateG2(sim, obs)$value)
+  sizes <- data.frame(year = 1, run = c(1, 2, 3), ha = c(1000, 2000, 1e7))
+  expect_equal(gateG4(sizes, data.frame(year = 1, ha = 2000))$value, 1)  # median run's largest = 2000
+  s6 <- data.frame(year = 1, run = 1:3, ignitions = 100, escapes = 10, area50 = c(1000, 1000, 1e7))
+  o6 <- data.frame(year = 1, ignitions = 100, escapes = 10, area50 = 1000)
+  expect_match(gateG6(s6, o6)$detail, "areaPerEscape 1(;|$)")
+  expect_equal(gateG1(c(1, 2, 3, 1000), 2.5)$value, 0)                    # median 2.5, not mean 251.5
+})

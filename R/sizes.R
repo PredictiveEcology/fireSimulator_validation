@@ -60,10 +60,10 @@ scoreSizesVsNull <- function(sim, obs, hist, minHa = 50, nNull = 999, seed = 1,
   list(byYear = byYear, pooled = pooled, draws = draws)
 }
 
-#' Mean AD of the model's sizes against other years' observations (the shuffled-years floor)
+#' Median AD of the model's sizes against other years' observations (the shuffled-years floor)
 #'
 #' @param sim,obs As in [scoreSizesVsNull()]. @param minHa,adFun As there.
-#' @return `data.table(year, adShuffled)`: for each scored year with observed and simulated fires, the mean AD between
+#' @return `data.table(year, adShuffled)`: for each scored year with observed and simulated fires, the median AD between
 #'   the observation and the simulated sizes of every other scored year that has simulated fires.
 shuffledSizesAD <- function(sim, obs, minHa = 50, adFun = fireSenseUtils:::adStatistic) {
   sim <- sim[sim$ha >= minHa, ]; obs <- obs[obs$ha >= minHa, ]
@@ -72,6 +72,6 @@ shuffledSizesAD <- function(sim, obs, minHa = 50, adFun = fireSenseUtils:::adSta
     o <- obs$ha[obs$year == y]
     other <- setdiff(years, y)
     ad <- if (length(o)) vapply(other, function(z) adFun(sim$ha[sim$year == z], o), 0) else NA_real_
-    data.table::data.table(year = y, adShuffled = mean(ad))
+    data.table::data.table(year = y, adShuffled = stats::median(ad))
   }))
 }
