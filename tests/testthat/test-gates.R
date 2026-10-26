@@ -17,11 +17,19 @@ test_that("G3: the fit set must carry half of the area", {
   expect_true(gateG3(60, 100)$pass); expect_false(gateG3(40, 100)$pass); expect_true(is.na(gateG3(NA, 100)$pass))
 })
 
-test_that("G4: largest simulated fire within 10x of the largest observed; share in fires over 100 kha reported", {
+test_that("G4: median of the 10 largest simulated fires within 10x of the observed; share over 100 kha reported", {
   g <- gateG4(data.frame(ha = c(100, 5e5, 1e5)), data.frame(ha = c(200, 60000)))
-  expect_equal(g$value, 5e5 / 6e4); expect_true(g$pass)
+  expect_equal(g$value, 1e5 / 30100); expect_true(g$pass)   # medians of all (fewer than 10) fires
   expect_equal(g$share100kha, 5e5 / (5e5 + 1e5 + 100))
+  expect_match(g$detail, "largest fire of the median run 500000 ha, largest observed 60000 ha")
   expect_false(gateG4(data.frame(ha = 7e5), data.frame(ha = 6e4))$pass)
+  ## one huge observed fire no longer sets the target: the 10 largest do
+  obs <- data.frame(ha = c(rep(1000, 9), 1e6)); sim <- data.frame(ha = rep(1000, 10))
+  expect_equal(gateG4(sim, obs)$value, 1)
+})
+
+test_that("topFires is the median of the k largest", {
+  expect_equal(topFires(c(1:20), 10), 15.5); expect_equal(topFires(c(5, 1), 10), 3); expect_equal(topFires(numeric(0)), 0)
 })
 
 test_that("G5: every kept p_c below p50", {
@@ -53,7 +61,7 @@ test_that("gates summarise runs by the median: one runaway run does not move the
   runaway <- sim; runaway$area50[runaway$run == 3] <- 1e7
   expect_equal(gateG2(runaway, obs)$value, gateG2(sim, obs)$value)
   sizes <- data.frame(year = 1, run = c(1, 2, 3), ha = c(1000, 2000, 1e7))
-  expect_equal(gateG4(sizes, data.frame(year = 1, ha = 2000))$value, 1)  # median run's largest = 2000
+  expect_equal(gateG4(sizes, data.frame(year = 1, ha = 2000))$value, 1)  # median run's top-10 median = 2000
   s6 <- data.frame(year = 1, run = 1:3, ignitions = 100, escapes = 10, area50 = c(1000, 1000, 1e7))
   o6 <- data.frame(year = 1, ignitions = 100, escapes = 10, area50 = 1000)
   expect_match(gateG6(s6, o6)$detail, "areaPerEscape 1(;|$)")
