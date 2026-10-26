@@ -7,7 +7,7 @@ defineModule(sim, list(
   keywords = c("fire", "validation", "hindcast", "CRPS"),
   authors = c(person("Eliot", "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = c("aut", "cre"))),
   childModules = character(0),
-  version = list(fireSimulator_validation = "0.0.0.9000"),
+  version = list(fireSimulator_validation = "0.0.0.9001"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list(),
