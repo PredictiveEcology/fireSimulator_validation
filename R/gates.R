@@ -48,23 +48,36 @@ gateG3 <- function(fitAreaHa, totalAreaHa) {
           sprintf("fit set %.0f ha of %.0f ha observed", fitAreaHa, totalAreaHa))
 }
 
-#' G4: the largest simulated fire is within 10x of the largest observed fire
+#' G4: the large simulated fires are within 10x of the large observed fires
 #'
-#' Each run's largest fire over the scored years; the median run is compared with the largest observed fire in the same
-#' years (all observed years when `obsSizes` has no `year`).
+#' Each run's median of its 10 largest fires over the scored years (`topFires()`); the median run is compared with the
+#' same statistic of the observed fires in those years (all observed years when `obsSizes` has no `year`). One largest
+#' fire is too noisy a target (Eliot, 2026-10-26); it stays in `detail` for information.
 #'
 #' @param simSizes `data.frame(year, run, ha)`: simulated fire sizes. @param obsSizes `data.frame(year, ha)`: observed sizes.
-#' @return `value` = median run's largest / largest observed; the share of simulated area in fires over 100 kha is in
-#'   `detail` and in the extra column `share100kha`.
-gateG4 <- function(simSizes, obsSizes) {
+#' @param k Number of largest fires.
+#' @return `value` = median run's median of its `k` largest / observed median of its `k` largest; the share of simulated
+#'   area in fires over 100 kha is in `detail` and in the extra column `share100kha`.
+gateG4 <- function(simSizes, obsSizes, k = 10L) {
   if ("year" %in% names(simSizes) && "year" %in% names(obsSizes)) obsSizes <- obsSizes[obsSizes$year %in% unique(simSizes$year), , drop = FALSE]
+  simTop <- if (nrow(simSizes)) stats::median(perRun(simSizes, "ha", function(x) topFires(x, k))) else 0
+  obsTop <- topFires(obsSizes$ha, k)
   simMax <- if (nrow(simSizes)) stats::median(perRun(simSizes, "ha", max)) else 0
-  obsMax <- max(obsSizes$ha, 0)
-  r <- simMax / obsMax
+  r <- simTop / obsTop
   share <- if (sum(simSizes$ha) > 0) sum(simSizes$ha[simSizes$ha > 1e5]) / sum(simSizes$ha) else 0
-  out <- gateRow("G4", is.finite(r) && r <= 10, r, sprintf("largest fire of the median run %.0f ha, largest observed %.0f ha, %.1f%% of simulated area in fires over 100 kha",
-                  simMax, obsMax, 100 * share))
+  out <- gateRow("G4", is.finite(r) && r <= 10, r, sprintf(paste("median of the %d largest fires: median run %.0f ha, observed %.0f ha;",
+                  "largest fire of the median run %.0f ha, largest observed %.0f ha; %.1f%% of simulated area in fires over 100 kha"),
+                  k, simTop, obsTop, simMax, max(obsSizes$ha, 0), 100 * share))
   out$share100kha <- share; out
+}
+
+#' Median of the `k` largest values (all of them when there are fewer than `k`; 0 when none)
+#'
+#' @param x Fire sizes. @param k Number of largest.
+#' @return One number.
+topFires <- function(x, k = 10L) {
+  if (!length(x)) return(0)
+  stats::median(utils::head(sort(x, decreasing = TRUE), k))
 }
 
 #' G5: the power-law threshold p_c is below p50 in every kept parameter set
