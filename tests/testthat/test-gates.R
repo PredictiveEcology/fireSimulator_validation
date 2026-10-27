@@ -64,6 +64,43 @@ test_that("gates summarise runs by the median: one runaway run does not move the
   expect_equal(gateG4(sizes, data.frame(year = 1, ha = 2000))$value, 1)  # median run's top-10 median = 2000
   s6 <- data.frame(year = 1, run = 1:3, ignitions = 100, escapes = 10, area50 = c(1000, 1000, 1e7))
   o6 <- data.frame(year = 1, ignitions = 100, escapes = 10, area50 = 1000)
-  expect_match(gateG6(s6, o6)$detail, "areaPerEscape 1(;|$)")
+  expect_match(gateG6(s6, o6)$detail, "areaPerEscape 1 \\(")
   expect_equal(gateG1(c(1, 2, 3, 1000), 2.5)$value, 0)                    # median 2.5, not mean 251.5
+})
+
+## run-to-run uncertainty: gate values carry a bootstrap interval over runs (resampled within each year)
+synthRuns <- function(nRuns, seed = 3, years = 1:6) {
+  set.seed(seed)
+  sy <- do.call(rbind, lapply(years, function(y) data.frame(year = y, run = seq_len(nRuns), ignitions = rpois(nRuns, 100),
+          escapes = rpois(nRuns, 10), area50 = rgamma(nRuns, 2, 1 / 500))))
+  ss <- do.call(rbind, lapply(seq_len(nrow(sy)), function(i) data.frame(year = sy$year[i], run = sy$run[i], ha = 50 * exp(rexp(5)))))
+  list(simYears = sy, simSizes = ss,
+       obsYears = data.frame(year = years, ignitions = 100, escapes = 10, area50 = 1000),
+       obsSizes = data.frame(year = rep(years, each = 5), ha = 50 * exp(rexp(5 * length(years)))))
+}
+
+test_that("gates G2, G4 and G6 report lo and hi beside value, and the detail shows the interval", {
+  d <- synthRuns(20)
+  for (g in list(gateG2(d$simYears, d$obsYears), gateG4(d$simSizes, d$obsSizes), gateG6(d$simYears, d$obsYears))) {
+    expect_true(all(c("lo", "hi") %in% names(g)))
+    expect_true(g$lo <= g$value && g$value <= g$hi)
+    expect_match(g$detail, "\\(\\d")
+  }
+  expect_equal(gateG2(d$simYears, d$obsYears, nBoot = 200, seed = 5), gateG2(d$simYears, d$obsYears, nBoot = 200, seed = 5))
+  expect_true(is.na(gateG1(c(100, 101, 99), 100)$lo))
+  g <- runGates(toyElf("t")); expect_true(all(c("lo", "hi") %in% names(g)))
+  expect_true(all(is.finite(g$lo[g$gate %in% c("G2", "G4", "G6")])))
+})
+
+test_that("the interval narrows as runs increase, and the pass rule does not use it", {
+  w <- function(n) { d <- synthRuns(n); g <- gateG2(d$simYears, d$obsYears); g$hi - g$lo }
+  expect_lt(w(200), w(10))
+  one <- synthRuns(1); g <- gateG2(one$simYears, one$obsYears)   # one run: nothing to resample
+  expect_equal(g$lo, g$value); expect_equal(g$hi, g$value)
+  d <- synthRuns(20); expect_equal(gateG2(d$simYears, d$obsYears, nBoot = 10)$pass, gateG2(d$simYears, d$obsYears, nBoot = 500)$pass)
+})
+
+test_that("runWave1 gates table has lo and hi", {
+  r <- runWave1(list(toyElf("a")), nBoot = 20, nNull = 5, nPerm = 99)
+  expect_true(all(c("lo", "hi") %in% names(r$gates)))
 })
