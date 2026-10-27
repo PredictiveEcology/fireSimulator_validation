@@ -1,7 +1,37 @@
 ## Gates: pass/fail checks against fixed thresholds, no null. Each returns a one-row data.frame
-## `(gate, pass, value, detail)`; `pass` is NA when the inputs needed are missing (not evaluated).
+## `(gate, pass, value, detail, lo, hi)`; `pass` is NA when the inputs needed are missing (not evaluated). `lo` and `hi`
+## are the 2.5% and 97.5% bootstrap quantiles of `value` over runs (`bootRuns()`); NA for gates with no runs (G1, G3, G5).
+## The pass rule uses `value` only.
 
-gateRow <- function(gate, pass, value, detail) data.frame(gate = gate, pass = pass, value = value, detail = detail)
+gateRow <- function(gate, pass, value, detail, lo = NA_real_, hi = NA_real_)
+  data.frame(gate = gate, pass = pass, value = value, detail = detail, lo = lo, hi = hi)
+
+#' Bootstrap a statistic over runs: resample whole runs, with replacement, within each year
+#'
+#' The point value and every resample go through the same `stat`. The j-th run drawn in a year is run j of the resample,
+#' so a run's rows in different years are drawn independently (the runs of different years are not paired).
+#'
+#' @param sim `data.frame` with `run` (and `year`; without it all rows are one year).
+#' @param stat `function(df)` returning a numeric vector, given the resampled rows with relabelled `run`.
+#' @param nBoot Resamples. @param seed Seed (the caller's RNG state is restored).
+#' @return List: `est` (`stat(sim)`), `lo`, `hi` (2.5% and 97.5% of the resamples, per element of `est`).
+bootRuns <- function(sim, stat, nBoot = 1000, seed = 1) {
+  est <- stat(sim)
+  if (!"run" %in% names(sim)) sim$run <- 1L
+  yr <- if ("year" %in% names(sim)) sim$year else rep(1L, nrow(sim))
+  idx <- lapply(split(seq_len(nrow(sim)), yr), function(i) unname(split(i, sim$run[i])))
+  boot <- withSeed(seed, vapply(seq_len(nBoot), function(b) {
+    parts <- lapply(idx, function(r) r[sample.int(length(r), replace = TRUE)])
+    x <- sim[unlist(parts, use.names = FALSE), , drop = FALSE]
+    x$run <- unlist(lapply(parts, function(p) rep(seq_along(p), lengths(p))), use.names = FALSE)
+    stat(x)
+  }, numeric(length(est))))
+  q <- apply(matrix(boot, nrow = length(est)), 1, stats::quantile, c(0.025, 0.975), na.rm = TRUE, names = FALSE)
+  list(est = est, lo = q[1, ], hi = q[2, ])
+}
+
+## "value (lo-hi)" for the detail text
+withInterval <- function(value, lo, hi) sprintf("%.3g (%.3g-%.3g)", value, lo, hi)
 inRatio <- function(r, lo = 0.25, hi = 4) is.finite(r) & r >= lo & r <= hi
 
 #' G1: the scoring pipeline reproduces the fit's objective within replicate noise
@@ -32,11 +62,16 @@ perRun <- function(x, value, fun = sum) {
 #' @param simYears `data.frame(year, run, area50)`: simulated annual area (ha, fires >= 50 ha) per run.
 #' @param obsYears `data.frame(year, area50)`: observed annual area.
 #' @param years Years compared (default: the simulated years).
-gateG2 <- function(simYears, obsYears, years = unique(simYears$year)) {
-  sim <- stats::median(perRun(simYears[simYears$year %in% years, , drop = FALSE], "area50"))
+#' @param nBoot,seed Bootstrap over runs (`bootRuns()`) for `lo` and `hi`.
+gateG2 <- function(simYears, obsYears, years = unique(simYears$year), nBoot = 1000, seed = 1) {
   obs <- sum(obsYears$area50[obsYears$year %in% years])
-  r <- if (obs > 0) sim / obs else if (sim == 0) 1 else Inf
-  gateRow("G2", inRatio(r), r, sprintf("median run %.0f ha, observed %.0f ha, over %d years", sim, obs, length(years)))
+  stat <- function(s) {
+    sim <- stats::median(perRun(s, "area50"))
+    c(ratio = if (obs > 0) sim / obs else if (sim == 0) 1 else Inf, simHa = sim)
+  }
+  b <- bootRuns(simYears[simYears$year %in% years, , drop = FALSE], stat, nBoot, seed)
+  gateRow("G2", inRatio(b$est[1]), b$est[1], sprintf("ratio %s; median run %.0f ha, observed %.0f ha, over %d years",
+          withInterval(b$est[1], b$lo[1], b$hi[1]), b$est[2], obs, length(years)), b$lo[1], b$hi[1])
 }
 
 #' G3: the fit's fire set carries at least half of the observed area
@@ -58,16 +93,19 @@ gateG3 <- function(fitAreaHa, totalAreaHa) {
 #' @param k Number of largest fires.
 #' @return `value` = median run's median of its `k` largest / observed median of its `k` largest; the share of simulated
 #'   area in fires over 100 kha is in `detail` and in the extra column `share100kha`.
-gateG4 <- function(simSizes, obsSizes, k = 10L) {
+gateG4 <- function(simSizes, obsSizes, k = 10L, nBoot = 1000, seed = 1) {
   if ("year" %in% names(simSizes) && "year" %in% names(obsSizes)) obsSizes <- obsSizes[obsSizes$year %in% unique(simSizes$year), , drop = FALSE]
-  simTop <- if (nrow(simSizes)) stats::median(perRun(simSizes, "ha", function(x) topFires(x, k))) else 0
   obsTop <- topFires(obsSizes$ha, k)
-  simMax <- if (nrow(simSizes)) stats::median(perRun(simSizes, "ha", max)) else 0
-  r <- simTop / obsTop
+  stat <- function(s) {
+    simTop <- if (nrow(s)) stats::median(perRun(s, "ha", function(x) topFires(x, k))) else 0
+    c(ratio = simTop / obsTop, simTop = simTop, simMax = if (nrow(s)) stats::median(perRun(s, "ha", max)) else 0)
+  }
+  b <- bootRuns(simSizes, stat, nBoot, seed)
+  r <- b$est[1]; simTop <- b$est[2]; simMax <- b$est[3]
   share <- if (sum(simSizes$ha) > 0) sum(simSizes$ha[simSizes$ha > 1e5]) / sum(simSizes$ha) else 0
-  out <- gateRow("G4", is.finite(r) && r <= 10, r, sprintf(paste("median of the %d largest fires: median run %.0f ha, observed %.0f ha;",
+  out <- gateRow("G4", is.finite(r) && r <= 10, r, sprintf(paste("median of the %d largest fires: ratio %s; median run %.0f ha, observed %.0f ha;",
                   "largest fire of the median run %.0f ha, largest observed %.0f ha; %.1f%% of simulated area in fires over 100 kha"),
-                  k, simTop, obsTop, simMax, max(obsSizes$ha, 0), 100 * share))
+                  k, withInterval(r, b$lo[1], b$hi[1]), simTop, obsTop, simMax, max(obsSizes$ha, 0), 100 * share), b$lo[1], b$hi[1])
   out$share100kha <- share; out
 }
 
@@ -94,37 +132,43 @@ gateG5 <- function(pc, p50) {
 #'
 #' @param simYears `data.frame(year, run, ignitions, escapes, area50)`. @param obsYears `data.frame(year, ignitions, escapes, area50)`.
 #' @return `value` = the link ratio furthest from 1 (on the log scale); `detail` lists the three ratios and names the failing links.
-gateG6 <- function(simYears, obsYears, years = unique(simYears$year)) {
+gateG6 <- function(simYears, obsYears, years = unique(simYears$year), nBoot = 1000, seed = 1) {
   s <- simYears[simYears$year %in% years, ]; o <- obsYears[obsYears$year %in% years, ]
-  ## each run's totals over the scored years, then the median run's link
-  ign <- perRun(s, "ignitions"); esc <- perRun(s, "escapes"); area <- perRun(s, "area50")
-  med <- function(x) { x <- x[is.finite(x)]; if (length(x)) stats::median(x) else NA_real_ }
-  ratios <- c(ignitions = med(ign) / sum(o$ignitions),
-              escapeRate = med(esc / ign) / (sum(o$escapes) / sum(o$ignitions)),
-              areaPerEscape = med(area / esc) / (sum(o$area50) / sum(o$escapes)))
-  ratios[!is.finite(ratios)] <- NA_real_
+  stat <- function(s) {
+    ## each run's totals over the scored years, then the median run's link
+    ign <- perRun(s, "ignitions"); esc <- perRun(s, "escapes"); area <- perRun(s, "area50")
+    med <- function(x) { x <- x[is.finite(x)]; if (length(x)) stats::median(x) else NA_real_ }
+    ratios <- c(ignitions = med(ign) / sum(o$ignitions),
+                escapeRate = med(esc / ign) / (sum(o$escapes) / sum(o$ignitions)),
+                areaPerEscape = med(area / esc) / (sum(o$area50) / sum(o$escapes)))
+    ratios[!is.finite(ratios)] <- NA_real_
+    c(ratios, furthest = if (all(is.na(ratios))) NA_real_ else ratios[which.max(abs(log(ratios)))])
+  }
+  b <- bootRuns(s, stat, nBoot, seed)
+  ratios <- b$est[1:3]
   ok <- inRatio(ratios)
   failing <- names(ratios)[!ok]
   pass <- if (all(is.na(ratios))) NA else length(failing) == 0L
-  gateRow("G6", pass, if (all(is.na(ratios))) NA_real_ else ratios[which.max(abs(log(ratios)))],
-          paste0(paste0(names(ratios), " ", signif(ratios, 3), collapse = "; "),
-                 if (length(failing)) paste0("; failing: ", paste(failing, collapse = ", ")) else ""))
+  gateRow("G6", pass, b$est[4],
+          paste0(paste0(names(ratios), " ", withInterval(ratios, b$lo[1:3], b$hi[1:3]), collapse = "; "),
+                 if (length(failing)) paste0("; failing: ", paste(failing, collapse = ", ")) else ""),
+          b$lo[4], b$hi[4])
 }
 
 #' Run the gates of one ELF
 #'
-#' @param elf An ELF input list (see [runWave1()]).
-#' @return `data.frame(gate, pass, value, detail)` for G1-G6, with an attribute `meaningful`: `FALSE` when G2 or G3 fails
+#' @param elf An ELF input list (see [runWave1()]). @param nBoot,seed Bootstrap over runs for the intervals `lo`, `hi`.
+#' @return `data.frame(gate, pass, value, detail, lo, hi, share100kha)` for G1-G6, with an attribute `meaningful`: `FALSE` when G2 or G3 fails
 #'   (the skill tests of this ELF are not meaningful).
-runGates <- function(elf) {
+runGates <- function(elf, nBoot = 1000, seed = 1) {
   f <- elf$fit
-  g4 <- gateG4(elf$simSizes, elf$obsSizes)
+  g4 <- gateG4(elf$simSizes, elf$obsSizes, nBoot = nBoot, seed = seed)
   g <- rbind(gateG1(f$pipelineObjective, f$objective),
-             gateG2(elf$simYears, elf$obsYears),
+             gateG2(elf$simYears, elf$obsYears, nBoot = nBoot, seed = seed),
              gateG3(f$fitAreaHa %||% NA_real_, f$totalAreaHa %||% NA_real_),
-             g4[, c("gate", "pass", "value", "detail")],
+             g4[, c("gate", "pass", "value", "detail", "lo", "hi")],
              gateG5(f$pc, f$p50),
-             gateG6(elf$simYears, elf$obsYears))
+             gateG6(elf$simYears, elf$obsYears, nBoot = nBoot, seed = seed))
   g$share100kha <- ifelse(g$gate == "G4", g4$share100kha, NA_real_)
   attr(g, "meaningful") <- !any(g$pass[g$gate %in% c("G2", "G3")] %in% FALSE)
   g
