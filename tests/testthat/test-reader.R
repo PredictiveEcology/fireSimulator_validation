@@ -65,3 +65,13 @@ test_that("observedRecord counts observed area on the burnable core, without a f
   expect_true(file.exists(sub("\\.rds$", "_burnable.rds", cacheFile)))
   expect_identical(readRDS(cacheFile), "a cache of the whole-polygon count")                       # the old file is left alone
 })
+
+test_that("readHindcastSim: a set-year with no simulated fires (header-only sizes file) reads as zero area", {
+  root <- withr::local_tempdir()
+  for (s in 1:2) mkSet(root, "9.9", 1986, s)
+  write.csv(data.frame(rep = integer(0), fire_id = integer(0), ha = numeric(0)), file.path(root, "9.9", 1986, 2, "hindcast_sizes.csv"), row.names = FALSE)
+  r <- readHindcastSim(root, "9.9", 1986L, sets = 1:2)
+  expect_equal(nrow(r$simSizes), 3)
+  expect_equal(as.vector(r$simYears$area50[r$simYears$run %in% c(2001, 2002)]), c(0, 0))
+  expect_equal(r$simYears$area50[r$simYears$run == 1002], 600)
+})

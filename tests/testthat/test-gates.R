@@ -84,7 +84,7 @@ test_that("gates G2, G4 and G6 report lo and hi beside value, and the detail sho
   for (g in list(gateG2(d$simYears, d$obsYears), gateG4(d$simSizes, d$obsSizes), gateG6(d$simYears, d$obsYears))) {
     expect_true(all(c("lo", "hi") %in% names(g)))
     expect_true(g$lo <= g$value && g$value <= g$hi)
-    expect_match(g$detail, "\\(\\d")
+    expect_match(g$detail, "\\(median-run 95%: \\d")
   }
   expect_equal(gateG2(d$simYears, d$obsYears, nBoot = 200, seed = 5), gateG2(d$simYears, d$obsYears, nBoot = 200, seed = 5))
   expect_true(is.na(gateG1(c(100, 101, 99), 100)$lo))
@@ -103,4 +103,33 @@ test_that("the interval narrows as runs increase, and the pass rule does not use
 test_that("runWave1 gates table has lo and hi", {
   r <- runWave1(list(toyElf("a")), nBoot = 20, nNull = 5, nPerm = 99)
   expect_true(all(c("lo", "hi") %in% names(r$gates)))
+})
+
+## spread of single runs: each gate's ratio computed for each run on its own, 2.5% and 97.5% across runs
+test_that("gates G2, G4 and G6 report runLo and runHi, the spread of single runs, beside lo and hi", {
+  d <- synthRuns(30)
+  for (g in list(gateG2(d$simYears, d$obsYears), gateG4(d$simSizes, d$obsSizes), gateG6(d$simYears, d$obsYears))) {
+    expect_true(all(c("runLo", "runHi") %in% names(g)))
+    expect_true(g$runLo <= g$lo && g$hi <= g$runHi)          # single runs vary more than the median run
+    expect_match(g$detail, "median-run 95%: [0-9.e+-]+-[0-9.e+-]+; single runs 95%: [0-9.e+-]+-[0-9.e+-]+")
+  }
+  expect_true(is.na(gateG1(c(100, 101, 99), 100)$runLo))
+  g <- runGates(toyElf("t")); expect_true(all(c("runLo", "runHi") %in% names(g)))
+  expect_true(all(is.finite(g$runLo[g$gate %in% c("G2", "G4", "G6")])))
+  expect_true(all(c("runLo", "runHi") %in% names(runWave1(list(toyElf("a")), nBoot = 20, nNull = 5, nPerm = 99)$gates)))
+})
+
+test_that("the single-run range is each run's own ratio and widens with between-run variance", {
+  sim <- data.frame(year = rep(1:2, each = 4), run = rep(1:4, 2), area50 = rep(c(100, 200, 300, 400), 2))
+  obs <- data.frame(year = 1:2, area50 = c(250, 250))
+  g <- gateG2(sim, obs)                                        # run totals 200, 400, 600, 800 over observed 500
+  expect_equal(g$runLo, unname(quantile(c(200, 400, 600, 800) / 500, 0.025)))
+  expect_equal(g$runHi, unname(quantile(c(200, 400, 600, 800) / 500, 0.975)))
+  spread <- function(sd) {
+    set.seed(2); s <- do.call(rbind, lapply(1:6, function(y) data.frame(year = y, run = 1:50, area50 = 500 * exp(rnorm(50, 0, sd)))))
+    g <- gateG2(s, data.frame(year = 1:6, area50 = 500)); c(run = g$runHi - g$runLo, med = g$hi - g$lo)
+  }
+  expect_gt(spread(1)[["run"]], spread(0.2)[["run"]])
+  expect_gt(spread(1)[["run"]], spread(1)[["med"]])
+  one <- synthRuns(1); g <- gateG2(one$simYears, one$obsYears); expect_equal(g$runLo, g$value); expect_equal(g$runHi, g$value)
 })
