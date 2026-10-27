@@ -27,7 +27,7 @@ readHindcastSim <- function(hindcastDir, elf, years, sets = 1:5, minHa = 50) {
     r <- fread0(file.path(d, "hindcast_reps.csv")); z <- fread0(file.path(d, "hindcast_sizes.csv"))
     run <- function(x) s * 1000L + x$rep
     list(reps = data.frame(year = y, run = run(r), ignitions = r$ignitions, escapes = r$nFires50),
-         sizes = data.frame(year = y, run = if (NROW(z)) run(z) else integer(0), ha = if (NROW(z)) z$ha else numeric(0)))
+         sizes = data.frame(year = rep(y, NROW(z)), run = if (NROW(z)) run(z) else integer(0), ha = if (NROW(z)) z$ha else numeric(0)))
   }))
   flat <- unlist(both, recursive = FALSE)
   simYears <- do.call(rbind, lapply(flat, `[[`, "reps")); simSizes <- do.call(rbind, lapply(flat, `[[`, "sizes"))
