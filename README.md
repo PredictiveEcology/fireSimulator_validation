@@ -13,5 +13,6 @@ Wave 1 of the hindcast test plan:
 - `runWave1()` (`R/runWave1.R`) takes a list of ELF inputs and returns a tidy results table, the gates and per-ELF tables.
 - `R/readFireSenseHindcast.R` is the only fireSense-specific file: it turns FireSenseTesting hindcast outputs, the
   spread-fit ledger and NFDB/NBAC observations into the ELF input list.
+- Figures (`R/plots.R`): `plotAreaByYear()`, `plotAnnualAreaDensity()`, `plotFireSizes()`, `plotIgnitions()`, `plotEscapes()`, one ELF each; `plotELFPanel()` puts them in one figure per ELF and `plotMetricPanel()` lays one metric out for all ELFs; `plotOverview()` shows the five gate ratios of all ELFs. The module draws the panels and the overview after scoring through `SpaDES.core::Plots()`; parameter `.plots` (`"screen"`, `"png"`) decides where.
 
 Tests: `testthat::test_dir("tests/testthat")`.
