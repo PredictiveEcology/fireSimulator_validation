@@ -1,4 +1,5 @@
-## The scoring functions are plain functions in R/; source them as simInit() would.
+## The scoring functions are plain functions in R/; source them as simInit() would (reqdPkgs of the plots are attached by simInit()).
+suppressMessages({library(ggplot2); library(patchwork)})
 for (f in list.files(testthat::test_path("..", "..", "R"), pattern = "\\.R$", full.names = TRUE)) source(f)
 
 ## A toy ELF in the runWave1() input format. `perfect = TRUE`: every simulated run is the observed year;
