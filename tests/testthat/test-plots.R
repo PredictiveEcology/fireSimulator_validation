@@ -88,9 +88,13 @@ test_that("plotMetricPanel gives one pane per ELF in area-ratio order, for every
     p <- plotMetricPanel(pl, s, m)
     expect_s3_class(p, "patchwork"); noWarn(p)
     expect_length(p$patches$plots, 1)
-    expect_equal(p$patches$plots[[1]]$labels$title, s$ELF[which.min(s$area_ratio)])
+    expect_equal(p$patches$plots[[1]]$labels$title, s$ELF[which.max(s$area_ratio)])
     expect_match(p$patches$annotation$title, metrics[[m]], fixed = TRUE)
   }
+  cap <- function(m) plotMetricPanel(pl, s, m)$patches$annotation$caption
+  expect_false(grepl("50 ha|error bars|area by year|x: observed", cap("ignitions")))
+  expect_match(cap("escapes"), "error bars")
+  expect_match(plotELFPanel(e1, s, plots = pl$toy)$patches$annotation$caption, "error bars.*x: observed|x: observed.*error bars")
   expect_error(plotMetricPanel(pl, s, "nope"))
   expect_equal(metricSize(14)$height, 4 * 5 + 2)
   expect_equal(plotELFPanel(e1, s, plots = pl$toy)$patches$annotation$title, "ELF toy")

@@ -45,7 +45,7 @@ doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
               filename = paste0("panel_", e$elf), ggsaveArgs = panelSize)
       Plots(data = summ, fn = plotOverview, filename = "overview", ggsaveArgs = overviewSize)
       for (m in names(metrics))
-        Plots(data = pl, fn = plotMetricPanel, summary = summ, metric = m, minHa = P(sim)$minHa,
+        Plots(data = pl, fn = plotMetricPanel, summary = summ, metric = m,
               filename = paste0("metric_", m), ggsaveArgs = metricSize(length(pl)))
     },
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],

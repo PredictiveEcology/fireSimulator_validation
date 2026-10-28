@@ -203,8 +203,8 @@ metrics <- c(areaByYear = "Area burned by year", annualArea = "Annual area burne
 ## functions, not objects: ggplot2 is attached after R/ is sourced
 noLeg <- function() guides(colour = "none", fill = "none", linetype = "none")
 panelTheme <- function() theme(plot.title = element_text(size = 22, face = "bold"), plot.subtitle = element_text(size = 14), plot.caption = element_text(size = 12))
-shareCaption <- function(minHa) paste0("fires of ", minHa, " ha or more; densities: ", densNote, "; reflected at ", minHa, " ha;\n", runCaption,
-                                      "; ", barCaption, "; area by year: x = observed, dots and bars = simulated median and 10-90% of runs")
+## one caption from the captions of several plots: their "; "-separated pieces, each once, wrapped
+unionCaption <- function(captions) paste(strwrap(paste(unique(unlist(strsplit(captions, "; ", fixed = TRUE))), collapse = "; "), 170), collapse = "\n")
 
 #' The five plots of one ELF
 #'
@@ -233,7 +233,7 @@ plotELFPanel <- function(elf, summary = NULL, label = "simulated", minHa = 50, b
   row <- if (!is.null(summary)) summary[as.character(summary$ELF) == as.character(elf$elf), , drop = FALSE]
   patchwork::wrap_plots(p, design = "AA\nBC\nDE", heights = c(1, 1.15, 1.15)) +
     patchwork::plot_layout(guides = "collect") +
-    patchwork::plot_annotation(title = paste("ELF", elf$elf), subtitle = if (!is.null(row) && nrow(row)) ratioText(row[1, ]), caption = shareCaption(minHa),
+    patchwork::plot_annotation(title = paste("ELF", elf$elf), subtitle = if (!is.null(row) && nrow(row)) ratioText(row[1, ]), caption = unionCaption(vapply(plots, function(p) p$labels$caption, "")),
                                theme = panelTheme()) &
     theme(legend.position = "bottom", legend.text = element_text(size = 14))
 }
@@ -247,22 +247,21 @@ metricSize <- function(n, ncol = metricCols) c(panelSize[names(panelSize) != "he
 
 #' One metric, every ELF: a pane per ELF
 #'
-#' The same plot of each ELF ([elfPlots()]), laid out in `ncol` columns, ordered by area ratio as in [plotOverview()]; pane title =
+#' The same plot of each ELF ([elfPlots()]), laid out in `ncol` columns, ordered by area ratio, highest first, as [plotOverview()] reads from the top; pane title =
 #' ELF id, one shared legend and caption. Size: [metricSize()].
 #'
 #' @param plots Named list (names = ELF ids) of [elfPlots()].
 #' @param summary The wide gate summary ([summariseGates()]), for the order of the panes.
 #' @param metric One of `names(metrics)`: `areaByYear`, `annualArea`, `fireSizes`, `ignitions`, `escapes`.
 #' @param ncol Columns of panes.
-#' @param minHa Only for the caption.
 #' @return A patchwork object.
-plotMetricPanel <- function(plots, summary, metric = names(metrics), ncol = metricCols, minHa = 50) {
+plotMetricPanel <- function(plots, summary, metric = names(metrics), ncol = metricCols) {
   metric <- match.arg(metric)
-  ids <- intersect(elfOrder(summary), names(plots))
+  ids <- intersect(rev(elfOrder(summary)), names(plots))
   p <- lapply(seq_along(ids), function(i) plots[[ids[i]]][[metric]] + labs(title = ids[i], subtitle = NULL, caption = NULL) +
                                           (if (i > 1) noLeg()))
   patchwork::wrap_plots(p, ncol = ncol) + patchwork::plot_layout(guides = "collect") +
-    patchwork::plot_annotation(title = paste0(metrics[[metric]], ": every ELF, ordered by area ratio"), caption = shareCaption(minHa), theme = panelTheme()) &
+    patchwork::plot_annotation(title = paste0(metrics[[metric]], ": every ELF, highest area ratio first"), caption = plots[[ids[1]]][[metric]]$labels$caption, theme = panelTheme()) &
     theme(legend.position = "bottom", legend.text = element_text(size = 14))
 }
 
