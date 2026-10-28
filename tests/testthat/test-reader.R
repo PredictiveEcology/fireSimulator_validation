@@ -50,6 +50,22 @@ test_that("the module file hands its input to the runner and nothing else", {
   expect_false(grepl("scheduleEvent", paste(vapply(exprs, function(e) paste(deparse(e), collapse = " "), ""), collapse = " ")))
 })
 
+test_that("observedRecord counts observed area on the burnable core, without a flammableRTM warning, and rebuilds an old cache", {
+  r <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 10000, ymin = 0, ymax = 10000, crs = "EPSG:3978")
+  core <- terra::setValues(r, ifelse(terra::colFromCell(r, seq_len(terra::ncell(r))) == 1, 1, NA))   # burnable cells only
+  pts <- terra::vect(cbind(500, 5500), crs = "EPSG:3978"); pts$YEAR <- 2000L; pts$CAUSE <- "N"; pts$SIZE_HA <- 10
+  poly <- terra::vect("POLYGON ((500 500, 1500 500, 1500 1500, 500 1500, 500 500))", crs = "EPSG:3978")
+  poly$YEAR <- 2000L; poly$FIRECAUS <- "Natural"                                                   # 100 ha, 50 ha in column 1
+  testthat::local_mocked_bindings(load_nfdb_points = function(...) pts, load_nbac_polys = function(...) poly,
+                                  .package = "fireregimetools")
+  cacheFile <- file.path(withr::local_tempdir(), "9.9.rds")
+  saveRDS("a cache of the whole-polygon count", cacheFile)
+  expect_no_warning(rec <- observedRecord(core, "nfdb", "nbac", years = 2000L, cacheFile = cacheFile))
+  expect_equal(rec$counts$areaBurnedHaAllCause, 50, tolerance = 0.03)
+  expect_true(file.exists(sub("\\.rds$", "_burnable.rds", cacheFile)))
+  expect_identical(readRDS(cacheFile), "a cache of the whole-polygon count")                       # the old file is left alone
+})
+
 test_that("readHindcastSim: a set-year with no simulated fires (header-only sizes file) reads as zero area", {
   root <- withr::local_tempdir()
   for (s in 1:2) mkSet(root, "9.9", 1986, s)

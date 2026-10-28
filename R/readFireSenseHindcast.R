@@ -51,14 +51,17 @@ hindcastCore <- function(hindcastDir, elf, inputsDir = "/mnt/fast/inputs") {
 #'
 #' [fireSenseUtils::hindcastObserved()] for each year on NFDB points and NBAC polygons clipped to the core. Cached in `cacheFile`.
 #' @param core [hindcastCore()]. @param nfdbPath,nbacPath The NFDB point shapefile and the NBAC polygon shapefile.
-#' @param years The record. @param cacheFile An `.rds` to read if present and write otherwise. @param cores Forked workers.
+#' @param years The record. @param cacheFile An `.rds` to read if present and write otherwise; `_burnable` is added to its name
+#'   (observed area is counted on the burnable cells of `core`, `flammableRTM = core`), so caches of the earlier whole-polygon count are not read.
+#' @param cores Forked workers.
 #' @return `list(counts, sizes, polys)`: counts per year, sizes with `cause` and `year`, polygons (wrapped).
 observedRecord <- function(core, nfdbPath, nbacPath, years = 1986:2024, cacheFile = NULL, cores = 1L) {
+  if (!is.null(cacheFile)) cacheFile <- sub("(\\.rds)?$", "_burnable\\1", cacheFile)
   if (!is.null(cacheFile) && file.exists(cacheFile)) return(readRDS(cacheFile))
   sa <- terra::as.polygons(terra::ext(core), crs = terra::crs(core))
   pts <- fireregimetools::load_nfdb_points(nfdbPath, sa, years, min_size_ha = 0)
   pol <- fireregimetools::load_nbac_polys(nbacPath, sa, years)
-  o <- parallel::mclapply(years, function(y) { x <- fireSenseUtils::hindcastObserved(core, pts, pol, y)
+  o <- parallel::mclapply(years, function(y) { x <- fireSenseUtils::hindcastObserved(core, pts, pol, y, flammableRTM = core)
     x$polys <- if (!is.null(x$polys) && NROW(x$polys)) terra::wrap(x$polys) else NULL   # SpatVectors cannot leave a fork unwrapped
     x }, mc.cores = cores)
   r <- list(counts = data.table::rbindlist(lapply(o, `[[`, "counts")),

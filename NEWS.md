@@ -1,5 +1,7 @@
 # fireSimulator_validation (development version)
 
+* `observedRecord()` passes `flammableRTM = core` to `fireSenseUtils::hindcastObserved()`, so observed area burned and fire sizes of the unscored years are counted on the burnable cells of the core, as the scored years of the hindcast are. Its cache file name gets `_burnable` (`<ELF>_burnable.rds`), so caches of the whole-polygon count are not reused and are rebuilt. Needs fireSenseUtils#190.
+
 * Hindcast figures come from the module: `plotAreaByYear()`, `plotAnnualAreaDensity()`, `plotFireSizes()`, `plotIgnitions()`, `plotEscapes()` (density curves; one simulated series against the observed record, medians, single-run envelopes), `plotELFPanel()` (one patchwork figure per ELF), `plotMetricPanel()` (one metric, a pane per ELF), `elfPlots()` and `plotOverview()` (the five gate ratios of all ELFs), drawn after scoring through `SpaDES.core::Plots()`, so the new `.plots` parameter decides screen or png. New `summariseGates()` gives the gate ratios as one row per ELF. New parameters `.plots`, `.plotInitialTime`, `simLabel`, `minHa`; `ggplot2`, `patchwork` and `scales` are in `reqdPkgs`.
 
 * Gates G2, G4 and G6 report their run-to-run uncertainty: new columns `lo` and `hi` (2.5% and 97.5% of a bootstrap that resamples whole runs, with replacement, within each year, `nBoot = 1000`, `seed = 1`) beside `value` in `gates`, and "0.72 (0.63-1.03)" in `detail`. The point value and the resamples go through the same statistic (`bootRuns()`). Pass/fail logic unchanged.
