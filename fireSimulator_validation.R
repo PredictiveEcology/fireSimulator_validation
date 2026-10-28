@@ -38,10 +38,15 @@ doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
       sim$validationResults <- runWave1(sim$validationELFs, nBoot = P(sim)$nBoot, nNull = P(sim)$nNull,
                                         nPerm = P(sim)$nPerm, seed = P(sim)$seed)
       summ <- summariseGates(sim$validationResults$gates)
+      pl <- stats::setNames(lapply(sim$validationELFs, elfPlots, label = P(sim)$simLabel, minHa = P(sim)$minHa),
+                            vapply(sim$validationELFs, `[[`, "", "elf"))
       for (e in sim$validationELFs)
-        Plots(data = e, fn = plotELFPanel, summary = summ, label = P(sim)$simLabel, minHa = P(sim)$minHa,
+        Plots(data = e, fn = plotELFPanel, summary = summ, label = P(sim)$simLabel, minHa = P(sim)$minHa, plots = pl[[e$elf]],
               filename = paste0("panel_", e$elf), ggsaveArgs = panelSize)
       Plots(data = summ, fn = plotOverview, filename = "overview", ggsaveArgs = overviewSize)
+      for (m in names(metrics))
+        Plots(data = pl, fn = plotMetricPanel, summary = summ, metric = m, minHa = P(sim)$minHa,
+              filename = paste0("metric_", m), ggsaveArgs = metricSize(length(pl)))
     },
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
                   "' in module '", current(sim)[1, "moduleName", with = FALSE], "'", sep = ""))

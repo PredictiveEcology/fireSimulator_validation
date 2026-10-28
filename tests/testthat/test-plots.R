@@ -26,6 +26,13 @@ test_that("the annual-area subtitle gives the share of years without fire for bo
   expect_match(p$labels$subtitle, "years with none: observed [0-9]+%, simulated [0-9]+%")
 })
 
+test_that("fire sizes are a density curve, escapes are bars", {
+  e <- toyPlotElf()
+  expect_s3_class(plotFireSizes(e)$layers[[1]]$geom, "GeomRibbon")
+  isCol <- function(p) any(vapply(p$layers, function(l) inherits(l$geom, "GeomCol"), TRUE))
+  expect_false(isCol(plotFireSizes(e))); expect_true(isCol(plotEscapes(e)))
+})
+
 test_that("an ELF whose simulation never burns still plots", {
   e <- toyPlotElf(); e$simSizes <- e$simSizes[0, , drop = FALSE]; e$simYears[, c("escapes", "area50")] <- 0
   for (f in list(plotAreaByYear, plotAnnualAreaDensity, plotFireSizes, plotEscapes)) noWarn(f(e))
@@ -42,7 +49,7 @@ test_that("summariseGates gives the five ratios of runWave1()'s gates and plotEL
   p <- plotELFPanel(e, s)
   expect_s3_class(p, "patchwork"); noWarn(p)
   expect_equal(p$patches$annotation$title, "ELF toy")
-  expect_match(p$patches$annotation$subtitle, "area [0-9.]+ \\([0-9.]+-[0-9.]+\\).*area per escape")
+  expect_match(p$patches$annotation$subtitle, "area [0-9]+\\.[0-9]{2} \\([0-9]+\\.[0-9]{2}-[0-9]+\\.[0-9]{2}\\).*area per escape [0-9]+\\.[0-9]{2}")
   expect_length(p$patches$plots, 4)
   noWarn(plotELFPanel(e))
 })
@@ -66,6 +73,25 @@ test_that("Plots() with .plots = png writes the panel and the overview to disk",
                      ggsaveArgs = panelSize, .plotInitialTime = NA)
   SpaDES.core::Plots(data = s, fn = plotOverview, types = "png", path = d, filename = "overview",
                      ggsaveArgs = overviewSize, .plotInitialTime = NA)
-  expect_true(all(file.exists(file.path(d, c("panel_toy.png", "overview.png")))))
+  SpaDES.core::Plots(data = list(toy = elfPlots(e)), fn = plotMetricPanel, summary = s, metric = "escapes", types = "png", path = d,
+                     filename = "metric_escapes", ggsaveArgs = metricSize(1), .plotInitialTime = NA)
+  expect_true(all(file.exists(file.path(d, c("panel_toy.png", "overview.png", "metric_escapes.png")))))
   expect_gt(min(file.size(file.path(d, c("panel_toy.png", "overview.png")))), 10000)
+})
+
+test_that("plotMetricPanel gives one pane per ELF in area-ratio order, for every metric, from plots built once", {
+  e1 <- toyPlotElf(); e2 <- within(toyElf(seed = 5), elf <- "toy2")
+  g <- do.call(rbind, lapply(list(e1, e2), function(x) cbind(ELF = x$elf, runGates(x, nBoot = 20))))
+  s <- summariseGates(g)
+  pl <- list(toy = elfPlots(e1), toy2 = elfPlots(e2))
+  for (m in names(metrics)) {
+    p <- plotMetricPanel(pl, s, m)
+    expect_s3_class(p, "patchwork"); noWarn(p)
+    expect_length(p$patches$plots, 1)
+    expect_equal(p$patches$plots[[1]]$labels$title, s$ELF[which.min(s$area_ratio)])
+    expect_match(p$patches$annotation$title, metrics[[m]], fixed = TRUE)
+  }
+  expect_error(plotMetricPanel(pl, s, "nope"))
+  expect_equal(metricSize(14)$height, 4 * 5 + 2)
+  expect_equal(plotELFPanel(e1, s, plots = pl$toy)$patches$annotation$title, "ELF toy")
 })

@@ -105,9 +105,7 @@ barsBoot <- function(obs, runVals, st, cutf, title, xlab, ylab, subtitle = NULL,
     labs(title = title, subtitle = subtitle, x = xlab, y = ylab, caption = caption) + theme_bw(base_size = baseSize) + theme(legend.position = "bottom")
 }
 
-## size and escape classes
-sizeBreaks <- c(50, 100, 200, 500, 1000, 2000, 5000, 1e4, 2e4, Inf)
-cutSz <- function(x) cut(x, sizeBreaks, right = FALSE, labels = c("50-100", "100-200", "200-500", "500-1k", "1k-2k", "2k-5k", "5k-10k", "10k-20k", "20k+"))
+## escape classes
 cutEs <- function(x) cut(x, c(-Inf, 0, 1, 2, 4, 9, Inf), labels = c("0", "1", "2", "3-4", "5-9", "10+"))
 
 elfSubtitle <- function(elf, ...) paste(c(paste("ELF", elf$elf), ...), collapse = "; ")
@@ -154,17 +152,18 @@ plotAnnualAreaDensity <- function(elf, label = "simulated", minHa = 50, baseSize
        caption = paste0("fires of ", minHa, " ha or more; ", densNote, "; reflected at ", minHa, " ha; ", runCaption), baseSize = baseSize)
 }
 
-#' Fire sizes: share of fires of `minHa` or more by size class
+#' Density of fire sizes
 #'
-#' Bars are shares, not a density, because the cut at `minHa` is a hard edge. Error bars: 95% range across single runs of each
-#' run's own share (runs without such fires are left out).
+#' Sizes of fires of `minHa` or more, log10 x, reflected at `minHa`, one bandwidth for both series; thin lines are single runs, the
+#' ribbon their pointwise 95% range, ticks the observed fires. A run without such fires has no line.
 #'
 #' @inheritParams plotAreaByYear
 plotFireSizes <- function(elf, label = "simulated", minHa = 50, baseSize = 15) {
   s <- hindcastSeries(elf, minHa); st <- seriesStyle(label)
   runs <- split(s$simSizes$ha, factor(s$simSizes$run, unique(s$grid$run)))
-  barsBoot(s$obsSizes$ha, runs, st, cutSz, "Fire sizes", "fire size (ha)", "share of fires",
-           subtitle = elfSubtitle(elf, paste0("fires of ", minHa, " ha or more; ", nrow(s$obsSizes), " observed")), caption = barCaption, baseSize = baseSize)
+  dens(s$obsSizes$ha, runs, st, "fire size (ha, log scale)", lower = minHa, title = "Fire sizes",
+       subtitle = elfSubtitle(elf, paste0("fires of ", minHa, " ha or more; ", nrow(s$obsSizes), " observed")),
+       caption = paste0("fires of ", minHa, " ha or more; ", densNote, "; reflected at ", minHa, " ha; ", runCaption), baseSize = baseSize)
 }
 
 #' Density of ignitions per year
@@ -190,14 +189,32 @@ plotEscapes <- function(elf, label = "simulated", baseSize = 15) {
            subtitle = elfSubtitle(elf), caption = barCaption, baseSize = baseSize)
 }
 
-fmtRatio <- function(x) format(signif(x, 2), trim = TRUE, scientific = FALSE)
+fmtRatio <- function(x) sprintf("%.2f", x)
 
-## "area 0.72 (0.31-1.9), ..." for one row of the summary; the whisker is the single-run 95% range
+## "area 0.72 (0.31-1.90), ..." for one row of the summary; the whisker is the single-run 95% range
 ratioText <- function(row) {
   txt <- vapply(names(gateRatios), function(k)
     sprintf("%s %s (%s-%s)", gateRatios[[k]], fmtRatio(row[[paste0(k, "_ratio")]]), fmtRatio(row[[paste0(k, "_runLo")]]), fmtRatio(row[[paste0(k, "_runHi")]])), "")
   paste0("simulated / observed, median run (single-run 95% range): ", paste(txt[1:3], collapse = ", "), ",\n", paste(txt[4:5], collapse = ", "))
 }
+
+metrics <- c(areaByYear = "Area burned by year", annualArea = "Annual area burned", fireSizes = "Fire sizes",
+             ignitions = "Ignitions per year", escapes = "Escapes per year")
+## functions, not objects: ggplot2 is attached after R/ is sourced
+noLeg <- function() guides(colour = "none", fill = "none", linetype = "none")
+panelTheme <- function() theme(plot.title = element_text(size = 22, face = "bold"), plot.subtitle = element_text(size = 14), plot.caption = element_text(size = 12))
+shareCaption <- function(minHa) paste0("fires of ", minHa, " ha or more; densities: ", densNote, "; reflected at ", minHa, " ha;\n", runCaption,
+                                      "; ", barCaption, "; area by year: x = observed, dots and bars = simulated median and 10-90% of runs")
+
+#' The five plots of one ELF
+#'
+#' Built once, then laid out by [plotELFPanel()] and [plotMetricPanel()].
+#'
+#' @inheritParams plotAreaByYear
+#' @return Named list of ggplots: `areaByYear`, `annualArea`, `fireSizes`, `ignitions`, `escapes`.
+elfPlots <- function(elf, label = "simulated", minHa = 50, baseSize = 15)
+  list(areaByYear = plotAreaByYear(elf, label, minHa, baseSize), annualArea = plotAnnualAreaDensity(elf, label, minHa, baseSize, showElf = FALSE),
+       fireSizes = plotFireSizes(elf, label, minHa, baseSize), ignitions = plotIgnitions(elf, label, baseSize), escapes = plotEscapes(elf, label, baseSize))
 
 #' One figure per ELF: the five hindcast plots
 #'
@@ -207,22 +224,45 @@ ratioText <- function(row) {
 #'
 #' @inheritParams plotAreaByYear
 #' @param summary The wide gate summary ([summariseGates()]); the row of `elf$elf` gives the ratios in the subtitle. Without it there is no subtitle.
+#' @param plots [elfPlots()] of `elf`, to lay out plots already built.
 #' @return A patchwork object.
-plotELFPanel <- function(elf, summary = NULL, label = "simulated", minHa = 50, baseSize = 15) {
-  noLeg <- guides(colour = "none", fill = "none", linetype = "none")
+plotELFPanel <- function(elf, summary = NULL, label = "simulated", minHa = 50, baseSize = 15, plots = elfPlots(elf, label, minHa, baseSize)) {
   bare <- labs(subtitle = NULL, caption = NULL)
-  p <- list(plotAreaByYear(elf, label, minHa, baseSize) + bare + noLeg,
-            plotAnnualAreaDensity(elf, label, minHa, baseSize, showElf = FALSE) + labs(caption = NULL),
-            plotFireSizes(elf, label, minHa, baseSize) + bare + noLeg,
-            plotIgnitions(elf, label, baseSize) + bare + noLeg,
-            plotEscapes(elf, label, baseSize) + bare + noLeg)
+  p <- list(plots$areaByYear + bare + noLeg(), plots$annualArea + labs(caption = NULL), plots$fireSizes + bare + noLeg(),
+            plots$ignitions + bare + noLeg(), plots$escapes + bare + noLeg())
   row <- if (!is.null(summary)) summary[as.character(summary$ELF) == as.character(elf$elf), , drop = FALSE]
-  cap <- paste0("fires of ", minHa, " ha or more; densities: ", densNote, "; reflected at ", minHa, " ha;\n", runCaption,
-                "; ", barCaption, "; area by year: x = observed, dots and bars = simulated median and 10-90% of runs")
   patchwork::wrap_plots(p, design = "AA\nBC\nDE", heights = c(1, 1.15, 1.15)) +
     patchwork::plot_layout(guides = "collect") +
-    patchwork::plot_annotation(title = paste("ELF", elf$elf), subtitle = if (!is.null(row) && nrow(row)) ratioText(row[1, ]), caption = cap,
-      theme = theme(plot.title = element_text(size = 22, face = "bold"), plot.subtitle = element_text(size = 14), plot.caption = element_text(size = 12))) &
+    patchwork::plot_annotation(title = paste("ELF", elf$elf), subtitle = if (!is.null(row) && nrow(row)) ratioText(row[1, ]), caption = shareCaption(minHa),
+                               theme = panelTheme()) &
+    theme(legend.position = "bottom", legend.text = element_text(size = 14))
+}
+
+## ELF ids ordered by area ratio, lowest first (the order of plotOverview(), bottom to top)
+elfOrder <- function(summary) as.character(summary$ELF)[order(summary$area_ratio, na.last = TRUE)]
+
+metricCols <- 3L
+## device size for [plotMetricPanel()]: about 4 inches per row of panes
+metricSize <- function(n, ncol = metricCols) c(panelSize[names(panelSize) != "height"], list(height = 4 * ceiling(n / ncol) + 2))
+
+#' One metric, every ELF: a pane per ELF
+#'
+#' The same plot of each ELF ([elfPlots()]), laid out in `ncol` columns, ordered by area ratio as in [plotOverview()]; pane title =
+#' ELF id, one shared legend and caption. Size: [metricSize()].
+#'
+#' @param plots Named list (names = ELF ids) of [elfPlots()].
+#' @param summary The wide gate summary ([summariseGates()]), for the order of the panes.
+#' @param metric One of `names(metrics)`: `areaByYear`, `annualArea`, `fireSizes`, `ignitions`, `escapes`.
+#' @param ncol Columns of panes.
+#' @param minHa Only for the caption.
+#' @return A patchwork object.
+plotMetricPanel <- function(plots, summary, metric = names(metrics), ncol = metricCols, minHa = 50) {
+  metric <- match.arg(metric)
+  ids <- intersect(elfOrder(summary), names(plots))
+  p <- lapply(seq_along(ids), function(i) plots[[ids[i]]][[metric]] + labs(title = ids[i], subtitle = NULL, caption = NULL) +
+                                          (if (i > 1) noLeg()))
+  patchwork::wrap_plots(p, ncol = ncol) + patchwork::plot_layout(guides = "collect") +
+    patchwork::plot_annotation(title = paste0(metrics[[metric]], ": every ELF, ordered by area ratio"), caption = shareCaption(minHa), theme = panelTheme()) &
     theme(legend.position = "bottom", legend.text = element_text(size = 14))
 }
 
@@ -238,7 +278,7 @@ plotELFPanel <- function(elf, summary = NULL, label = "simulated", minHa = 50, b
 #' @return A ggplot.
 plotOverview <- function(summary, baseSize = 15) {
   lim <- c(0.01, 100); clamp <- function(x) pmin(pmax(x, lim[1]), lim[2])
-  ord <- as.character(summary$ELF)[order(summary$area_ratio, na.last = TRUE)]
+  ord <- elfOrder(summary)
   d <- do.call(rbind, lapply(names(gateRatios), function(k) data.frame(
     ELF = factor(as.character(summary$ELF), ord), measure = factor(gateRatios[[k]], gateRatios),
     ratio = clamp(summary[[paste0(k, "_ratio")]]), lo = clamp(summary[[paste0(k, "_runLo")]]), hi = clamp(summary[[paste0(k, "_runHi")]]))))
