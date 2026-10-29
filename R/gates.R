@@ -3,12 +3,17 @@
 ## and `hi` are the 2.5% and 97.5% bootstrap quantiles of `value` over runs (the uncertainty of the median run); `runLo` and
 ## `runHi` are the 2.5% and 97.5% quantiles of `value` computed for each run on its own (the spread of single runs); both
 ## from `bootRuns()`. NA for gates with no runs (G1, G3, G5). The pass rule uses `value` only.
+## `obsRank` is where the observed record ranks among the single runs (mid-rank percentile, 0-1: 0 = every run above the
+## observed, 1 = every run below) and `nRuns` the number of runs; filled by G2 and G4 (G6 has three links, so its ranks are
+## in `detail` only). NA elsewhere.
 
-gateRow <- function(gate, pass, value, detail, lo = NA_real_, hi = NA_real_, runLo = NA_real_, runHi = NA_real_)
-  data.frame(gate = gate, pass = pass, value = value, detail = detail, lo = lo, hi = hi, runLo = runLo, runHi = runHi)
+gateRow <- function(gate, pass, value, detail, lo = NA_real_, hi = NA_real_, runLo = NA_real_, runHi = NA_real_,
+                    obsRank = NA_real_, nRuns = NA_integer_)
+  data.frame(gate = gate, pass = pass, value = value, detail = detail, lo = lo, hi = hi, runLo = runLo, runHi = runHi,
+             obsRank = obsRank, nRuns = nRuns)
 
 ## the columns gateRow() adds beside value
-gateCols <- c("gate", "pass", "value", "detail", "lo", "hi", "runLo", "runHi")
+gateCols <- c("gate", "pass", "value", "detail", "lo", "hi", "runLo", "runHi", "obsRank", "nRuns")
 
 #' Bootstrap a statistic over runs: resample whole runs, with replacement, within each year
 #'
@@ -20,7 +25,11 @@ gateCols <- c("gate", "pass", "value", "detail", "lo", "hi", "runLo", "runHi")
 #' @param stat `function(df)` returning a numeric vector, given the resampled rows with relabelled `run`.
 #' @param nBoot Resamples. @param seed Seed (the caller's RNG state is restored).
 #' @return List: `est` (`stat(sim)`), `lo`, `hi` (2.5% and 97.5% of the resamples, per element of `est`), `runLo`, `runHi`
-#'   (2.5% and 97.5% of `stat` over single runs).
+#'   (2.5% and 97.5% of `stat` over single runs), `single` (matrix, one row per element of `est`, one column per run: `stat`
+#'   of each run alone), `nRuns`, and `obsRank`: per element of `est`, the mid-rank percentile of the observed among the
+#'   single runs, `(sum(single < 1) + 0.5 * sum(single == 1)) / nRuns`. Only meaningful for ratio elements (sim / obs, so the
+#'   observed is 1): 0 when every run is above the observed, 1 when every run is below, 0.5 when all tie at 1. Runs where the
+#'   statistic is not finite are left out of the sums and of the denominator.
 bootRuns <- function(sim, stat, nBoot = 1000, seed = 1) {
   est <- stat(sim)
   if (!"run" %in% names(sim)) sim$run <- 1L
@@ -34,13 +43,16 @@ bootRuns <- function(sim, stat, nBoot = 1000, seed = 1) {
   }, numeric(length(est))))
   ci <- function(x) apply(matrix(x, nrow = length(est)), 1, stats::quantile, c(0.025, 0.975), na.rm = TRUE, names = FALSE)
   single <- vapply(split(seq_len(nrow(sim)), sim$run), function(i) stat(sim[i, , drop = FALSE]), numeric(length(est)))
+  single <- matrix(single, nrow = length(est), dimnames = list(names(est), NULL))
   q <- ci(boot); r <- ci(single)
-  list(est = est, lo = q[1, ], hi = q[2, ], runLo = r[1, ], runHi = r[2, ])
+  obsRank <- apply(single, 1, function(x) { x <- x[is.finite(x)]; (sum(x < 1) + 0.5 * sum(x == 1)) / length(x) })
+  list(est = est, lo = q[1, ], hi = q[2, ], runLo = r[1, ], runHi = r[2, ], single = single, obsRank = obsRank,
+       nRuns = ncol(single))
 }
 
-## "value (median-run 95%: lo-hi; single runs 95%: runLo-runHi)" for the detail text
-withInterval <- function(value, b, i = 1L) sprintf("%.3g (median-run 95%%: %.3g-%.3g; single runs 95%%: %.3g-%.3g)",
-                                                    value, b$lo[i], b$hi[i], b$runLo[i], b$runHi[i])
+## "value (median-run 95%: lo-hi; single runs 95%: runLo-runHi); observed above X% of N runs" for the detail text
+withInterval <- function(value, b, i = 1L) sprintf("%.3g (median-run 95%%: %.3g-%.3g; single runs 95%%: %.3g-%.3g); observed above %.0f%% of %d runs",
+                                                    value, b$lo[i], b$hi[i], b$runLo[i], b$runHi[i], 100 * b$obsRank[i], b$nRuns)
 inRatio <- function(r, lo = 0.25, hi = 4) is.finite(r) & r >= lo & r <= hi
 
 #' G1: the scoring pipeline reproduces the fit's objective within replicate noise
@@ -80,7 +92,7 @@ gateG2 <- function(simYears, obsYears, years = unique(simYears$year), nBoot = 10
   }
   b <- bootRuns(simYears[simYears$year %in% years, , drop = FALSE], stat, nBoot, seed)
   gateRow("G2", inRatio(b$est[1]), b$est[1], sprintf("ratio %s; median run %.0f ha, observed %.0f ha, over %d years",
-          withInterval(b$est[1], b), b$est[2], obs, length(years)), b$lo[1], b$hi[1], b$runLo[1], b$runHi[1])
+          withInterval(b$est[1], b), b$est[2], obs, length(years)), b$lo[1], b$hi[1], b$runLo[1], b$runHi[1], b$obsRank[1], b$nRuns)
 }
 
 #' G3: the fit's fire set carries at least half of the observed area
@@ -114,7 +126,7 @@ gateG4 <- function(simSizes, obsSizes, k = 10L, nBoot = 1000, seed = 1) {
   share <- if (sum(simSizes$ha) > 0) sum(simSizes$ha[simSizes$ha > 1e5]) / sum(simSizes$ha) else 0
   out <- gateRow("G4", is.finite(r) && r <= 10, r, sprintf(paste("median of the %d largest fires: ratio %s; median run %.0f ha, observed %.0f ha;",
                   "largest fire of the median run %.0f ha, largest observed %.0f ha; %.1f%% of simulated area in fires over 100 kha"),
-                  k, withInterval(r, b), simTop, obsTop, simMax, max(obsSizes$ha, 0), 100 * share), b$lo[1], b$hi[1], b$runLo[1], b$runHi[1])
+                  k, withInterval(r, b), simTop, obsTop, simMax, max(obsSizes$ha, 0), 100 * share), b$lo[1], b$hi[1], b$runLo[1], b$runHi[1], b$obsRank[1], b$nRuns)
   out$share100kha <- share; out
 }
 
@@ -167,7 +179,7 @@ gateG6 <- function(simYears, obsYears, years = unique(simYears$year), nBoot = 10
 #' Run the gates of one ELF
 #'
 #' @param elf An ELF input list (see [runWave1()]). @param nBoot,seed Bootstrap over runs for the intervals `lo`, `hi`.
-#' @return `data.frame(gate, pass, value, detail, lo, hi, runLo, runHi, share100kha)` for G1-G6, with an attribute `meaningful`: `FALSE` when G2 or G3 fails
+#' @return `data.frame(gate, pass, value, detail, lo, hi, runLo, runHi, obsRank, nRuns, share100kha)` for G1-G6, with an attribute `meaningful`: `FALSE` when G2 or G3 fails
 #'   (the skill tests of this ELF are not meaningful).
 runGates <- function(elf, nBoot = 1000, seed = 1) {
   f <- elf$fit
