@@ -54,14 +54,16 @@ hindcastCore <- function(hindcastDir, elf, inputsDir = "/mnt/fast/inputs") {
 #' @param years The record. @param cacheFile An `.rds` to read if present and write otherwise; `_burnable` is added to its name
 #'   (observed area is counted on the burnable cells of `core`, `flammableRTM = core`), so caches of the earlier whole-polygon count are not read.
 #' @param cores Forked workers.
+#' @param fireCauses `NULL` (default): NFDB L/N and NBAC Natural. Cause groups (`fireSenseUtils::fireCauseCodes()`), e.g.
+#'   `c("natural", "unknown")`, count those fires; they are added to the cache file's name, so records of other causes are not read.
 #' @return `list(counts, sizes, polys)`: counts per year, sizes with `cause` and `year`, polygons (wrapped).
-observedRecord <- function(core, nfdbPath, nbacPath, years = 1986:2024, cacheFile = NULL, cores = 1L) {
-  if (!is.null(cacheFile)) cacheFile <- sub("(\\.rds)?$", "_burnable\\1", cacheFile)
+observedRecord <- function(core, nfdbPath, nbacPath, years = 1986:2024, cacheFile = NULL, cores = 1L, fireCauses = NULL) {
+  if (!is.null(cacheFile)) cacheFile <- sub("(\\.rds)?$", paste0("_burnable", if (!is.null(fireCauses)) paste0("_", paste(sort(fireCauses), collapse = "-")), "\\1"), cacheFile)
   if (!is.null(cacheFile) && file.exists(cacheFile)) return(readRDS(cacheFile))
   sa <- terra::as.polygons(terra::ext(core), crs = terra::crs(core))
   pts <- fireregimetools::load_nfdb_points(nfdbPath, sa, years, min_size_ha = 0)
   pol <- fireregimetools::load_nbac_polys(nbacPath, sa, years)
-  o <- parallel::mclapply(years, function(y) { x <- fireSenseUtils::hindcastObserved(core, pts, pol, y, flammableRTM = core)
+  o <- parallel::mclapply(years, function(y) { x <- fireSenseUtils::hindcastObserved(core, pts, pol, y, flammableRTM = core, fireCauses = fireCauses)
     x$polys <- if (!is.null(x$polys) && NROW(x$polys)) terra::wrap(x$polys) else NULL   # SpatVectors cannot leave a fork unwrapped
     x }, mc.cores = cores)
   r <- list(counts = data.table::rbindlist(lapply(o, `[[`, "counts")),
@@ -134,14 +136,16 @@ readLedgerRow <- function(ledgerFile, elf) {
 #' @param elf ELF name. @param hindcastDir `/mnt/fast/outputs/hindcast<ledgerSuffix>`. @param ledgerFile See [readLedgerRow()].
 #' @param nfdbPath,nbacPath Observation shapefiles. @param obsCacheDir Folder for the [observedRecord()] caches.
 #' @param years Scored years (only those with every set finished are used). @param sets Sets. @param inputsDir See [hindcastCore()].
-#' @param cores Forked workers for the observed record. @return The list [runWave1()] documents; `NULL` if no year is finished.
+#' @param cores Forked workers for the observed record. @param fireCauses See [observedRecord()]; use the `fireCauses` the hindcast ran with.
+#' @return The list [runWave1()] documents; `NULL` if no year is finished.
 readFireSenseHindcast <- function(elf, hindcastDir, ledgerFile = NULL, nfdbPath, nbacPath, obsCacheDir,
-                                  years = seq(1986L, 2021L, 5L), sets = 1:5, inputsDir = "/mnt/fast/inputs", cores = 1L) {
+                                  years = seq(1986L, 2021L, 5L), sets = 1:5, inputsDir = "/mnt/fast/inputs", cores = 1L, fireCauses = NULL) {
   done <- hindcastFinishedYears(hindcastDir, elf, years, sets)
   if (!length(done)) return(NULL)
   sim <- readHindcastSim(hindcastDir, elf, done, sets)
   core <- hindcastCore(hindcastDir, elf, inputsDir)
-  rec <- observedRecord(core, nfdbPath, nbacPath, cacheFile = file.path(obsCacheDir, paste0(elf, ".rds")), cores = cores)
+  rec <- observedRecord(core, nfdbPath, nbacPath, cacheFile = file.path(obsCacheDir, paste0(elf, ".rds")), cores = cores,
+                      fireCauses = fireCauses)
   obs <- readHindcastObserved(rec, hindcastDir, elf, done)
   fit <- if (is.null(ledgerFile)) list() else readLedgerRow(ledgerFile, elf)
   fit$fitAreaHa <- obs$fitAreaHa; fit$totalAreaHa <- obs$nbacAreaHa

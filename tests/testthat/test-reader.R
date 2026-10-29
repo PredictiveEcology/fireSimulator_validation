@@ -75,3 +75,24 @@ test_that("readHindcastSim: a set-year with no simulated fires (header-only size
   expect_equal(as.vector(r$simYears$area50[r$simYears$run %in% c(2001, 2002)]), c(0, 0))
   expect_equal(r$simYears$area50[r$simYears$run == 1002], 600)
 })
+
+test_that("observedRecord: fireCauses = NULL is as before; natural + unknown also counts the unknown-cause fire, in its own cache", {
+  skip_if_not("fireCauseCodes" %in% getNamespaceExports("fireSenseUtils"))
+  r <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 10000, ymin = 0, ymax = 10000, crs = "EPSG:3978")
+  core <- terra::setValues(r, ifelse(terra::colFromCell(r, seq_len(terra::ncell(r))) <= 5, 1, NA))
+  pts <- terra::vect(cbind(c(500, 1500), 5500), crs = "EPSG:3978"); pts$YEAR <- 2000L; pts$CAUSE <- c("N", "U"); pts$SIZE_HA <- 10
+  poly <- terra::vect(c("POLYGON ((500 500, 1500 500, 1500 1500, 500 1500, 500 500))",
+                        "POLYGON ((2500 500, 3500 500, 3500 1500, 2500 1500, 2500 500))"), crs = "EPSG:3978")
+  poly$YEAR <- 2000L; poly$FIRECAUS <- c("Natural", "Undetermined")
+  testthat::local_mocked_bindings(load_nfdb_points = function(...) pts, load_nbac_polys = function(...) poly,
+                                  .package = "fireregimetools")
+  cacheFile <- file.path(withr::local_tempdir(), "9.9.rds")
+  base <- observedRecord(core, "nfdb", "nbac", years = 2000L, cacheFile = cacheFile)
+  expect_equal(base$counts$ignitions, 1)
+  expect_equal(base$counts$areaBurnedHa, 100, tolerance = 0.03)
+  both <- observedRecord(core, "nfdb", "nbac", years = 2000L, cacheFile = cacheFile, fireCauses = c("unknown", "natural"))
+  expect_equal(both$counts$ignitions, 2)
+  expect_equal(both$counts$areaBurnedHa, 200, tolerance = 0.03)
+  expect_true(file.exists(sub("\\.rds$", "_burnable.rds", cacheFile)))
+  expect_true(file.exists(sub("\\.rds$", "_burnable_natural-unknown.rds", cacheFile)))
+})
