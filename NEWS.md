@@ -1,5 +1,7 @@
 # fireSimulator_validation (development version)
 
+* Gates G2, G4 and G6 report where the observed record ranks among the single runs: `bootRuns()` also returns `single` (the statistic of each run), `obsRank` (mid-rank percentile of the observed, 1, among the runs: 0 = every run above it) and `nRuns`; `gates` gains the columns `obsRank` and `nRuns` (G2, G4; NA elsewhere), and every `detail` ratio ends "; observed above 35% of 20 runs" (G6: one per link), after the unchanged interval text. Values and pass/fail unchanged.
+
 * `observedRecord()` and `readFireSenseHindcast()` take `fireCauses` (default `NULL`: unchanged, NFDB L/N and NBAC Natural), passed to `fireSenseUtils::hindcastObserved()`; e.g. `c("natural", "unknown")` scores the causes the model was fitted to. The groups are in the observed-record cache file's name, so records of other causes are not read. Needs fireSenseUtils with `fireCauseCodes()` (Depends-on: PredictiveEcology/fireSenseUtils#193).
 
 * `observedRecord()` passes `flammableRTM = core` to `fireSenseUtils::hindcastObserved()`, so observed area burned and fire sizes of the unscored years are counted on the burnable cells of the core, as the scored years of the hindcast are. Its cache file name gets `_burnable` (`<ELF>_burnable.rds`), so caches of the whole-polygon count are not reused and are rebuilt. Needs fireSenseUtils#190.

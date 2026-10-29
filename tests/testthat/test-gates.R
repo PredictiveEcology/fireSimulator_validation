@@ -133,3 +133,40 @@ test_that("the single-run range is each run's own ratio and widens with between-
   expect_gt(spread(1)[["run"]], spread(1)[["med"]])
   one <- synthRuns(1); g <- gateG2(one$simYears, one$obsYears); expect_equal(g$runLo, g$value); expect_equal(g$runHi, g$value)
 })
+
+## where the observed record ranks among the single runs (a ratio sim/obs, so observed = 1)
+test_that("bootRuns obsRank is 0 when every run is above the observed, 1 when all are below, 0.5 with ties at 1", {
+  mk <- function(v) data.frame(year = 1, run = seq_along(v), x = v)
+  stat <- function(s) c(ratio = stats::median(s$x))
+  rk <- function(v) bootRuns(mk(v), stat, nBoot = 10)
+  expect_equal(rk(c(2, 3, 4))$obsRank, c(ratio = 0))
+  expect_equal(rk(c(0.2, 0.3, 0.4))$obsRank, c(ratio = 1))
+  expect_equal(rk(c(1, 1, 1, 1))$obsRank, c(ratio = 0.5))
+  expect_equal(rk(c(0.5, 1, 2, 3))$obsRank, c(ratio = 0.375))   # (1 + 0.5) / 4
+  b <- rk(c(0.5, 1, 2, 3))
+  expect_equal(b$nRuns, 4L); expect_equal(dim(b$single), c(1L, 4L)); expect_equal(as.vector(b$single), c(0.5, 1, 2, 3))
+})
+
+test_that("G2 and G4 rows carry obsRank and nRuns; G6 and the other gates do not", {
+  d <- synthRuns(30)
+  g2 <- gateG2(d$simYears, d$obsYears); g4 <- gateG4(d$simSizes, d$obsSizes)
+  for (g in list(g2, g4)) { expect_true(g$obsRank >= 0 && g$obsRank <= 1); expect_equal(g$nRuns, 30L) }
+  expect_equal(g2$obsRank, bootRuns(d$simYears, function(s) stats::median(perRun(s, "area50")) / sum(d$obsYears$area50), 10)$obsRank[[1]])
+  expect_true(all(is.na(c(gateG1(c(100, 101, 99), 100)$obsRank, gateG3(5, 10)$obsRank, gateG5(0.1, 0.2)$obsRank))))
+  all <- runGates(toyElf("t"))
+  expect_true(all(c("obsRank", "nRuns") %in% names(all)))
+  expect_true(all(is.finite(all$obsRank[all$gate %in% c("G2", "G4")])))
+})
+
+test_that("detail carries the observed rank, after the unchanged interval text, for G2, G4 and every G6 link", {
+  d <- synthRuns(30)
+  old <- "ratio [0-9.e+-]+ \\(median-run 95%: [0-9.e+-]+-[0-9.e+-]+; single runs 95%: [0-9.e+-]+-[0-9.e+-]+\\)"
+  for (g in list(gateG2(d$simYears, d$obsYears), gateG4(d$simSizes, d$obsSizes))) {
+    expect_match(g$detail, old)
+    expect_match(g$detail, "\\); observed above [0-9]+% of 30 runs")
+  }
+  g6 <- gateG6(d$simYears, d$obsYears)$detail
+  for (k in c("ignitions", "escapeRate", "areaPerEscape"))
+    expect_match(g6, paste0(k, " [0-9.e+-]+ \\(median-run 95%: [0-9.e+-]+-[0-9.e+-]+; single runs 95%: [0-9.e+-]+-[0-9.e+-]+\\); observed above [0-9]+% of 30 runs"))
+  expect_equal(lengths(regmatches(g6, gregexpr("observed above", g6))), 3L)
+})
