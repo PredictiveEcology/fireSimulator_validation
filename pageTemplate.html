@@ -1,0 +1,274 @@
+<title>Hindcast validation, burnable fits</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: narrow sticky index on the left, figures get the rest of the width; one metric and one ELF shown at a time */
+:root {
+  --ground: #f4f6f8; --panel: #ffffff; --ink: #16202a; --muted: #586474; --rule: #d9dfe6;
+  --accent: #0072b2; --accent-soft: #e3f0f8; --warn: #9a4a06; --warn-soft: #fbeedd;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --nav: 9.5rem;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground: #11161c; --panel: #1a2129; --ink: #e5eaf0; --muted: #9aa7b5; --rule: #2d3640;
+  --accent: #5aaee3; --accent-soft: #15324a; --warn: #f2ab62; --warn-soft: #3b2814; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --ground: #11161c; --panel: #1a2129; --ink: #e5eaf0; --muted: #9aa7b5; --rule: #2d3640;
+  --accent: #5aaee3; --accent-soft: #15324a; --warn: #f2ab62; --warn-soft: #3b2814; color-scheme: dark }
+body { background: var(--ground); color: var(--ink); font: 15px/1.5 var(--sans); }
+.wrap { display: grid; grid-template-columns: var(--nav) minmax(0, 1fr); gap: 1.75rem; max-width: 1800px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 1.25rem 3rem; }
+nav { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 1rem); align-self: start; max-height: calc(100vh - 2rem); overflow-y: auto;
+  font-size: 0.86rem; display: flex; flex-direction: column; gap: 0.15rem; }
+nav .grp { margin-top: 0.8rem; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+nav a { color: var(--ink); text-decoration: none; padding: 0.12rem 0.45rem; border-radius: 4px; }
+nav a:hover, nav a:focus-visible { background: var(--accent-soft); outline: none; }
+nav a.on { color: var(--accent); font-weight: 600; background: var(--accent-soft); }
+nav a.elf { font-family: var(--mono); font-size: 0.82rem; }
+main { min-width: 0; display: flex; flex-direction: column; gap: 2.25rem; }
+header h1 { margin: 0; font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 0.25rem 0 0; color: var(--muted); }
+section > h2 { margin: 0 0 0.5rem; font-size: 1.2rem; font-weight: 600; display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
+section > h2 small { font-size: 0.85rem; font-weight: 400; color: var(--muted); }
+.note { color: var(--muted); font-size: 0.86rem; margin: 0.5rem 0 0; max-width: 75ch; }
+.tablebox { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 0.45rem 0.75rem; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+tbody tr:last-child td { border-bottom: 0; }
+th button { font: inherit; font-weight: 600; color: var(--ink); background: none; border: 0; padding: 0.15rem 0.25rem; cursor: pointer; border-radius: 4px; }
+th button:hover, th button:focus-visible { background: var(--accent-soft); outline: none; }
+th button[aria-sort] { color: var(--accent); }
+th button[aria-sort="descending"]::after { content: " \25BC"; font-size: 0.7em; }
+th button[aria-sort="ascending"]::after { content: " \25B2"; font-size: 0.7em; }
+td .v { font-family: var(--mono); font-weight: 500; }
+td .r { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); margin-left: 0.35rem; }
+td .rk { display: block; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+td.out { background: var(--warn-soft); }
+.rankbox { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 0.75rem 0.5rem 0.5rem; overflow-x: auto; }
+.rankbox svg { display: block; width: 100%; min-width: 560px; height: auto; font-family: var(--sans); }
+td.out .v { color: var(--warn); }
+td a { color: var(--accent); font-family: var(--mono); font-weight: 500; text-decoration: none; }
+td a:hover { text-decoration: underline; }
+.chip { display: inline-block; font-size: 0.75rem; padding: 0 0.4rem; border-radius: 999px; background: var(--warn-soft); color: var(--warn); margin-left: 0.35rem; }
+.fig { display: block; width: 100%; max-width: 1760px; background: #ffffff; border: 1px solid var(--rule); border-radius: 6px; padding: 0.5rem; box-sizing: border-box; cursor: zoom-in; }
+.fig img { display: block; width: 100%; height: auto; }
+.seg { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem; }
+.seg button { font: inherit; font-size: 0.86rem; padding: 0.3rem 0.7rem; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); border-radius: 999px; cursor: pointer; }
+.seg button.elf { font-family: var(--mono); font-size: 0.82rem; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stepper { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; }
+.stepper button { font: inherit; padding: 0.25rem 0.7rem; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); border-radius: 4px; cursor: pointer; }
+.stepper button:focus-visible { outline: 2px solid var(--accent); }
+.stepper .ratios { font-family: var(--mono); font-size: 0.82rem; color: var(--muted); }
+#zoom { position: fixed; inset: 0; background: rgba(10, 14, 18, 0.88); overflow: auto; z-index: 10; cursor: zoom-out;
+  padding: calc(env(safe-area-inset-top, 0px) + 1rem) calc(env(safe-area-inset-right, 0px) + 1rem) calc(env(safe-area-inset-bottom, 0px) + 1rem) calc(env(safe-area-inset-left, 0px) + 1rem); }
+#zoom img { display: block; margin: 0 auto; max-width: none; background: #ffffff; }
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); }
+  nav { position: static; flex-direction: row; flex-wrap: wrap; max-height: none; gap: 0.25rem; }
+  nav .grp { width: 100%; margin-top: 0.4rem; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="wrap">
+  <nav id="nav" aria-label="Sections">
+    <a href="#scores">Scores</a>
+    <a href="#rank">Observed rank</a>
+    <a href="#overview">Overview</a>
+    <span class="grp">By metric</span>
+    <div id="navMetric" style="display:contents"></div>
+    <span class="grp">By ELF</span>
+    <div id="navElf" style="display:contents"></div>
+  </nav>
+  <main>
+    <header>
+      <h1>Hindcast validation</h1>
+      <p>__SUBTITLE__ &middot; <span id="nElf"></span> ELFs scored &middot; updated __UPDATED__</p>
+    </header>
+
+    <section id="scores">
+      <h2>Scores <small>simulated / observed, median run; click a column to sort</small></h2>
+      <div class="tablebox">
+        <table>
+          <thead><tr>
+            <th><button type="button" data-k="elf">ELF</button></th>
+            <th><button type="button" data-k="area">Area burned</button></th>
+            <th><button type="button" data-k="top10">10 largest fires</button></th>
+            <th><button type="button" data-k="ign">Ignitions</button></th>
+            <th><button type="button" data-k="esc">Escape rate</button></th>
+            <th><button type="button" data-k="ape">Area per escape</button></th>
+            <th><button type="button" data-k="gates">Gates</button></th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="note">Small numbers are the 95% range across single runs, the range one observed history should fall in. Shaded cells: the observed value lies outside that range. "obs N%": the share of the 20 runs the observed record is above (50% = a typical run; 100% = above every run). Gates: G2&ndash;G6 of the wave-1 plan; G1 is not scored here.</p>
+    </section>
+
+    <section id="rank">
+      <h2>Observed rank <small>is the observed record a plausible draw from the runs?</small></h2>
+      <div class="rankbox"><svg id="rankSvg" role="img" aria-label="Share of runs the observed record is above, per ELF and metric"></svg></div>
+      <p class="note">Each mark is one ELF: the share of its 20 runs that the observed record is above. If the model is calibrated, the marks spread evenly from 0% to 100%. A pile-up at the right means observed sits in the upper tail of what the model simulates, i.e. the model runs low. <span id="rankSummary"></span></p>
+    </section>
+
+    <section id="overview">
+      <h2>Overview <small>every ratio, every ELF</small></h2>
+      <a class="fig" href="__OVERVIEW__"><img src="__OVERVIEW__" alt="Dot and whisker plot of the five ratios for every scored ELF" width="1760" height="990"></a>
+    </section>
+
+    <section id="metric">
+      <h2>By metric <small>one pane per ELF, highest area ratio first</small></h2>
+      <div class="seg" id="segMetric" role="group" aria-label="Metric"></div>
+      <a class="fig" id="metricLink" href="#"><img id="metricImg" alt="" width="1760" height="2420"></a>
+    </section>
+
+    <section id="elf">
+      <h2>By ELF <small>area by year, then the four distributions</small></h2>
+      <div class="seg" id="segElf" role="group" aria-label="ELF"></div>
+      <div class="stepper">
+        <button type="button" id="prev" aria-label="Previous ELF">&larr; Previous</button>
+        <button type="button" id="next" aria-label="Next ELF">Next &rarr;</button>
+        <span class="ratios" id="elfRatios"></span>
+      </div>
+      <a class="fig" id="elfLink" href="#"><img id="elfImg" alt="" width="1760" height="1320"></a>
+    </section>
+  </main>
+</div>
+<div id="zoom" hidden><img id="zoomImg" alt=""></div>
+
+<script>
+const IMG = /*IMG*/{};
+const ROWS = /*ROWS*/[];
+const METRICS = [
+  ["areaByYear", "Area by year"], ["annualArea", "Annual area"], ["fireSizes", "Fire sizes"],
+  ["ignitions", "Ignitions"], ["escapes", "Escapes"]];
+const COLS = ["area", "top10", "ign", "esc", "ape"];
+const NAMES = { area: "area", top10: "10 largest", ign: "ignitions", esc: "escape rate", ape: "area/escape" };
+const slug = e => "elf-" + e.replace(/\./g, "_");
+const f2 = v => v.toFixed(2);
+const byArea = ROWS.slice().sort((a, b) => b.area[0] - a.area[0]);
+let sortK = "area", sortD = -1, metric = METRICS[0][0], elf = byArea.length ? byArea[0].elf : null;
+
+document.getElementById("nElf").textContent = ROWS.length;
+
+function renderRank() {
+  const W = 760, L = 120, R = 20, chip = 15, x = p => L + p * (W - L - R);
+  let y = 24, out = "";
+  for (const k of COLS) {
+    const pts = ROWS.filter(r => r[k][3] != null).map(r => ({ elf: r.elf, p: r[k][3] }));
+    const stacks = {};
+    pts.sort((a, b) => a.p - b.p || a.elf.localeCompare(b.elf, "en", { numeric: true }));
+    for (const q of pts) { const key = Math.round(q.p * 1000); q.i = (stacks[key] = (stacks[key] ?? -1) + 1); }
+    const depth = Math.max(1, ...Object.values(stacks).map(v => v + 1));
+    const big = k === "area", h = depth * (big ? chip : 9) + 10;
+    out += `<text x="8" y="${y + h - 6}" font-size="12.5" font-weight="${big ? 600 : 400}" fill="var(--ink)">${NAMES[k]}</text>`;
+    out += `<line x1="${x(0)}" y1="${y + h}" x2="${x(1)}" y2="${y + h}" stroke="var(--rule)"/>`;
+    for (const q of pts) {
+      const cx = x(q.p), cy = y + h - 6 - q.i * (big ? chip : 9);
+      const tip = `<title>${q.elf} ${NAMES[k]}: observed above ${Math.round(q.p * 100)}% of runs</title>`;
+      out += big
+        ? `<text x="${cx}" y="${cy + 4}" text-anchor="middle" font-family="var(--mono)" font-size="10.5" fill="${q.p >= 0.9 ? "var(--warn)" : "var(--ink)"}">${q.elf}${tip}</text>`
+        : `<circle cx="${cx}" cy="${cy}" r="3.6" fill="${q.p >= 0.9 || q.p <= 0.1 ? "var(--warn)" : "var(--accent)"}">${tip}</circle>`;
+    }
+    y += h + 14;
+  }
+  let axis = "";
+  for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+    axis += `<line x1="${x(t)}" y1="14" x2="${x(t)}" y2="${y - 10}" stroke="var(--rule)" stroke-dasharray="${t === 0.5 ? "3 3" : "0"}" stroke-width="${t === 0.5 ? 1.4 : 1}"/>`;
+    axis += `<text x="${x(t)}" y="10" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--muted)">${t * 100}%</text>`;
+  }
+  const svg = document.getElementById("rankSvg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${y}`);
+  svg.innerHTML = axis + out;
+  const a = ROWS.map(r => r.area[3]).filter(v => v != null).sort((p, q) => p - q);
+  if (a.length) {
+    const med = a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2;
+    document.getElementById("rankSummary").textContent =
+      `Area burned: median rank ${Math.round(med * 100)}%; ${a.filter(v => v > 0.5).length} of ${a.length} ELFs above 50%, ${a.filter(v => v >= 0.9).length} at 90% or more.`;
+  }
+}
+renderRank();
+
+function renderRows() {
+  const v = r => sortK === "elf" ? r.elf : sortK === "gates" ? r.gates : r[sortK][0];
+  const s = ROWS.slice().sort((a, b) => sortK === "elf"
+    ? sortD * a.elf.localeCompare(b.elf, "en", { numeric: true }) : sortD * (v(a) - v(b)));
+  document.getElementById("rows").innerHTML = s.map(r => {
+    const cells = COLS.map(k => {
+      const [m, lo, hi, rk] = r[k], out = hi < 1 || lo > 1;
+      const rank = rk == null ? "" : `<span class="rk">obs ${Math.round(rk * 100)}%</span>`;
+      return `<td class="${out ? "out" : ""}" title="${r.elf} ${NAMES[k]}: ${f2(m)}, single runs ${f2(lo)} to ${f2(hi)}${out ? " (observed outside)" : ""}${rk == null ? "" : `; observed above ${Math.round(rk * 100)}% of runs`}">` +
+        `<span class="v">${f2(m)}</span><span class="r">${f2(lo)}&ndash;${f2(hi)}</span>${rank}</td>`;
+    }).join("");
+    const g = `${r.gates}/__NGATES__${r.failed ? `<span class="chip">${r.failed}</span>` : ""}`;
+    return `<tr><td><a href="#${slug(r.elf)}">${r.elf}</a></td>${cells}<td>${g}</td></tr>`;
+  }).join("");
+  document.querySelectorAll("th button").forEach(b => {
+    if (b.dataset.k === sortK) b.setAttribute("aria-sort", sortD > 0 ? "ascending" : "descending");
+    else b.removeAttribute("aria-sort");
+  });
+}
+document.querySelectorAll("th button").forEach(b => b.addEventListener("click", () => {
+  const k = b.dataset.k;
+  sortD = k === sortK ? -sortD : (k === "elf" ? 1 : -1); sortK = k; renderRows();
+}));
+
+function setMetric(m) {
+  metric = m; const src = IMG["metric_" + m];
+  const img = document.getElementById("metricImg");
+  img.src = src; img.alt = METRICS.find(x => x[0] === m)[1] + ", one pane per ELF";
+  document.getElementById("metricLink").href = src;
+  document.querySelectorAll("#segMetric button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === m)));
+  markNav();
+}
+function setElf(e) {
+  elf = e; const r = ROWS.find(x => x.elf === e), src = IMG["panel_" + e];
+  const img = document.getElementById("elfImg");
+  img.src = src; img.alt = `ELF ${e}: area by year, annual area, fire sizes, ignitions and escapes`;
+  document.getElementById("elfLink").href = src;
+  document.getElementById("elfRatios").textContent = `ELF ${e} · ` + COLS.map(k => `${NAMES[k]} ${f2(r[k][0])}`).join(" · ");
+  document.querySelectorAll("#segElf button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.e === e)));
+  markNav();
+}
+function markNav() {
+  document.querySelectorAll("#navMetric a").forEach(a => a.classList.toggle("on", a.dataset.m === metric));
+  document.querySelectorAll("#navElf a").forEach(a => a.classList.toggle("on", a.dataset.e === elf));
+}
+
+document.getElementById("segMetric").innerHTML = METRICS.map(([m, l]) => `<button type="button" data-m="${m}">${l}</button>`).join("");
+document.getElementById("navMetric").innerHTML = METRICS.map(([m, l]) => `<a href="#metric-${m}" data-m="${m}">${l}</a>`).join("");
+document.getElementById("segElf").innerHTML = byArea.map(r => `<button type="button" class="elf" data-e="${r.elf}">${r.elf}</button>`).join("");
+document.getElementById("navElf").innerHTML = byArea.map(r => `<a class="elf" href="#${slug(r.elf)}" data-e="${r.elf}">${r.elf}</a>`).join("");
+document.querySelectorAll("#segMetric button").forEach(b => b.addEventListener("click", () => setMetric(b.dataset.m)));
+document.querySelectorAll("#segElf button").forEach(b => b.addEventListener("click", () => setElf(b.dataset.e)));
+const step = d => { const i = byArea.findIndex(r => r.elf === elf); setElf(byArea[(i + d + byArea.length) % byArea.length].elf); };
+document.getElementById("prev").addEventListener("click", () => step(-1));
+document.getElementById("next").addEventListener("click", () => step(1));
+
+// Deep links: #metric-<name> and #elf-<id with _ for .> select the figure and scroll to its section.
+function fromHash() {
+  const h = location.hash.slice(1);
+  if (h.startsWith("metric-")) { const m = h.slice(7); if (METRICS.some(x => x[0] === m)) { setMetric(m); document.getElementById("metric").scrollIntoView(); } }
+  else if (h.startsWith("elf-")) { const r = ROWS.find(x => slug(x.elf) === h); if (r) { setElf(r.elf); document.getElementById("elf").scrollIntoView(); } }
+}
+window.addEventListener("hashchange", fromHash);
+
+// Click a figure to see it at full size; click or Esc closes.
+const zoom = document.getElementById("zoom"), zoomImg = document.getElementById("zoomImg");
+document.querySelectorAll("a.fig").forEach(a => a.addEventListener("click", ev => {
+  ev.preventDefault(); const img = a.querySelector("img"); zoomImg.src = img.src; zoomImg.alt = img.alt; zoom.hidden = false;
+}));
+zoom.addEventListener("click", () => { zoom.hidden = true; });
+document.addEventListener("keydown", ev => {
+  if (ev.key === "Escape") zoom.hidden = true;
+  if (!zoom.hidden || ev.target.closest("button, a, input")) return;
+  const r = document.getElementById("elf").getBoundingClientRect();
+  if (r.top < innerHeight && r.bottom > 0) { if (ev.key === "ArrowLeft") step(-1); if (ev.key === "ArrowRight") step(1); }
+});
+
+renderRows(); setMetric(metric); if (elf) setElf(elf); fromHash();
+</script>

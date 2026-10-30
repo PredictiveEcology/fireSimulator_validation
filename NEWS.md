@@ -1,5 +1,7 @@
 # fireSimulator_validation (development version)
 
+* `runTablesToELF()` builds an ELF input from plain per-run tables (fire sizes and ignitions per run-year), for simulators that do not write FireSense hindcast folders, e.g. a fast hindcast. `buildValidationPage()` writes the scores table, the observed-rank chart, the overview and the per-metric and per-ELF figures as one self-contained HTML file from `pageTemplate.html`.
+
 * `fireCauses` of `observedRecord()` and `readFireSenseHindcast()` now defaults to `fireSenseUtils::fireSenseFireCauses` (`c("natural", "unknown")`), the default of `fireSense_dataPrepFit` and `fireSense_summary`, instead of `NULL` (NFDB L/N, NBAC Natural), so the observed record has the causes the model was fitted to. The `"natural"` label of the observed sizes names the fires of these causes. `NULL` still gives the old record. Observed-record caches of the default now carry `_natural-unknown` in the file name, so old default caches are not read.
 
 * Gates G2, G4 and G6 report where the observed record ranks among the single runs: `bootRuns()` also returns `single` (the statistic of each run), `obsRank` (mid-rank percentile of the observed, 1, among the runs: 0 = every run above it) and `nRuns`; `gates` gains the columns `obsRank` and `nRuns` (G2, G4; NA elsewhere), and every `detail` ratio ends "; observed above 35% of 20 runs" (G6: one per link), after the unchanged interval text. Values and pass/fail unchanged.

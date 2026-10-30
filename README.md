@@ -11,6 +11,7 @@ Wave 1 of the hindcast test plan:
   regression on the ELF-mean climate covariate), N0 (shuffled years) as a floor; pooled over ELFs with a bootstrap
   over ELFs and years (`R/bootstrap.R`).
 - `runWave1()` (`R/runWave1.R`) takes a list of ELF inputs and returns a tidy results table, the gates and per-ELF tables.
+- `runTablesToELF()` (`R/readRunTables.R`) builds the same input from plain per-run tables (fire sizes, ignitions per run-year), and `buildValidationPage()` (`R/buildPage.R`, layout `pageTemplate.html`) writes the figures and the scores table as one HTML file.
 - `R/readFireSenseHindcast.R` is the only fireSense-specific file: it turns FireSenseTesting hindcast outputs, the
   spread-fit ledger and NFDB/NBAC observations into the ELF input list.
 - Figures (`R/plots.R`): `plotAreaByYear()`, `plotAnnualAreaDensity()`, `plotFireSizes()`, `plotIgnitions()`, `plotEscapes()`, one ELF each; `plotELFPanel()` puts them in one figure per ELF and `plotMetricPanel()` lays one metric out for all ELFs; `plotOverview()` shows the five gate ratios of all ELFs. The module draws the panels and the overview after scoring through `SpaDES.core::Plots()`; parameter `.plots` (`"screen"`, `"png"`) decides where.
