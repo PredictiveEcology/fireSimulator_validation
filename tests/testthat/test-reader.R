@@ -95,5 +95,6 @@ test_that("observedRecord: the default fireCauses is natural + unknown, as in th
   expect_equal(nat$counts$areaBurnedHa, 100, tolerance = 0.03)
   expect_true(file.exists(sub("\\.rds$", "_burnable_natural-unknown.rds", cacheFile)))
   expect_true(file.exists(sub("\\.rds$", "_burnable_natural.rds", cacheFile)))
-  expect_identical(formals(readFireSenseHindcast)$fireCauses, formals(observedRecord)$fireCauses)
+  expect_identical(formals(readFireSenseHindcast)$fireCauses, quote(fireSenseUtils::fireSenseFireCauses))
+  expect_identical(formals(observedRecord)$fireCauses, quote(fireSenseUtils::fireSenseFireCauses))
 })
