@@ -54,10 +54,11 @@ hindcastCore <- function(hindcastDir, elf, inputsDir = "/mnt/fast/inputs") {
 #' @param years The record. @param cacheFile An `.rds` to read if present and write otherwise; `_burnable` is added to its name
 #'   (observed area is counted on the burnable cells of `core`, `flammableRTM = core`), so caches of the earlier whole-polygon count are not read.
 #' @param cores Forked workers.
-#' @param fireCauses `NULL` (default): NFDB L/N and NBAC Natural. Cause groups (`fireSenseUtils::fireCauseCodes()`), e.g.
-#'   `c("natural", "unknown")`, count those fires; they are added to the cache file's name, so records of other causes are not read.
+#' @param fireCauses Cause groups (`fireSenseUtils::fireCauseCodes()`) whose fires are counted (labelled `"natural"` in `sizes`);
+#'   default `fireSenseUtils::fireSenseFireCauses` (`c("natural", "unknown")`), the default of `fireSense_dataPrepFit` and `fireSense_summary`. Use the `fireCauses` the fit
+#'   and the hindcast ran with. `NULL`: NFDB L/N and NBAC Natural. They are added to the cache file's name, so records of other causes are not read.
 #' @return `list(counts, sizes, polys)`: counts per year, sizes with `cause` and `year`, polygons (wrapped).
-observedRecord <- function(core, nfdbPath, nbacPath, years = 1986:2024, cacheFile = NULL, cores = 1L, fireCauses = NULL) {
+observedRecord <- function(core, nfdbPath, nbacPath, years = 1986:2024, cacheFile = NULL, cores = 1L, fireCauses = fireSenseUtils::fireSenseFireCauses) {
   if (!is.null(cacheFile)) cacheFile <- sub("(\\.rds)?$", paste0("_burnable", if (!is.null(fireCauses)) paste0("_", paste(sort(fireCauses), collapse = "-")), "\\1"), cacheFile)
   if (!is.null(cacheFile) && file.exists(cacheFile)) return(readRDS(cacheFile))
   sa <- terra::as.polygons(terra::ext(core), crs = terra::crs(core))
@@ -139,7 +140,7 @@ readLedgerRow <- function(ledgerFile, elf) {
 #' @param cores Forked workers for the observed record. @param fireCauses See [observedRecord()]; use the `fireCauses` the hindcast ran with.
 #' @return The list [runWave1()] documents; `NULL` if no year is finished.
 readFireSenseHindcast <- function(elf, hindcastDir, ledgerFile = NULL, nfdbPath, nbacPath, obsCacheDir,
-                                  years = seq(1986L, 2021L, 5L), sets = 1:5, inputsDir = "/mnt/fast/inputs", cores = 1L, fireCauses = NULL) {
+                                  years = seq(1986L, 2021L, 5L), sets = 1:5, inputsDir = "/mnt/fast/inputs", cores = 1L, fireCauses = fireSenseUtils::fireSenseFireCauses) {
   done <- hindcastFinishedYears(hindcastDir, elf, years, sets)
   if (!length(done)) return(NULL)
   sim <- readHindcastSim(hindcastDir, elf, done, sets)
