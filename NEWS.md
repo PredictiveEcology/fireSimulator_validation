@@ -1,5 +1,7 @@
 # fireSimulator_validation (development version)
 
+* `fireCauses` of `observedRecord()` and `readFireSenseHindcast()` now defaults to `c("natural", "unknown")`, the default of `fireSense_dataPrepFit` and `fireSense_summary`, instead of `NULL` (NFDB L/N, NBAC Natural), so the observed record has the causes the model was fitted to. The `"natural"` label of the observed sizes names the fires of these causes. `NULL` still gives the old record. Observed-record caches of the default now carry `_natural-unknown` in the file name, so old default caches are not read.
+
 * Gates G2, G4 and G6 report where the observed record ranks among the single runs: `bootRuns()` also returns `single` (the statistic of each run), `obsRank` (mid-rank percentile of the observed, 1, among the runs: 0 = every run above it) and `nRuns`; `gates` gains the columns `obsRank` and `nRuns` (G2, G4; NA elsewhere), and every `detail` ratio ends "; observed above 35% of 20 runs" (G6: one per link), after the unchanged interval text. Values and pass/fail unchanged.
 
 * `observedRecord()` and `readFireSenseHindcast()` take `fireCauses` (default `NULL`: unchanged, NFDB L/N and NBAC Natural), passed to `fireSenseUtils::hindcastObserved()`; e.g. `c("natural", "unknown")` scores the causes the model was fitted to. The groups are in the observed-record cache file's name, so records of other causes are not read. Needs fireSenseUtils with `fireCauseCodes()` (Depends-on: PredictiveEcology/fireSenseUtils#193).
