@@ -38,12 +38,13 @@ readHindcastSim <- function(hindcastDir, elf, years, sets = 1:5, minHa = 50) {
 }
 
 #' The ELF core on the hindcast grid (1 where the simulation can burn, NA elsewhere)
-#' @param hindcastDir,elf As above. @param inputsDir Where the ELF inputs are (`<inputsDir>/<ELF>/NRV/370/1/rtml_<ELF>.tif`).
+#' @param hindcastDir,elf As above. @param inputsDir Where the ELF inputs are (`<inputsDir>/<ELF>/rtml_<ELF>.tif` on the GPSC, `<inputsDir>/<ELF>/NRV/370/1/rtml_<ELF>.tif` where an NRV run has been made).
 #' @return `SpatRaster`.
 hindcastCore <- function(hindcastDir, elf, inputsDir = "/mnt/fast/inputs") {
   f <- Sys.glob(file.path(hindcastDir, elf, "*", "*", "hindcast_burnMap.tif"))[1]
   g <- terra::rast(f)
-  core <- terra::crop(terra::rast(file.path(inputsDir, elf, "NRV/370/1", paste0("rtml_", elf, ".tif"))), g)
+  rtml <- file.path(inputsDir, elf, c("", "NRV/370/1"), paste0("rtml_", elf, ".tif"))
+  core <- terra::crop(terra::rast(rtml[file.exists(rtml)][1]), g)
   terra::ifel(core == 2 & !is.na(g), 1, NA)
 }
 

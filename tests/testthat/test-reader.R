@@ -98,3 +98,16 @@ test_that("observedRecord: the default fireCauses is natural + unknown, as in th
   expect_identical(formals(readFireSenseHindcast)$fireCauses, quote(fireSenseUtils::fireSenseFireCauses))
   expect_identical(formals(observedRecord)$fireCauses, quote(fireSenseUtils::fireSenseFireCauses))
 })
+
+test_that("hindcastCore finds the core raster with or without the NRV folders", {
+  g <- terra::rast(nrows = 2, ncols = 2, vals = 1:4)
+  for (sub in c("", "NRV/370/1")) {
+    root <- withr::local_tempdir()
+    dir.create(file.path(root, "hc", "9.9", "1986", "1"), recursive = TRUE)
+    terra::writeRaster(g, file.path(root, "hc", "9.9", "1986", "1", "hindcast_burnMap.tif"))
+    dir.create(file.path(root, "in", "9.9", sub), recursive = TRUE)
+    terra::writeRaster(terra::rast(nrows = 2, ncols = 2, vals = c(2, 2, 1, 2)), file.path(root, "in", "9.9", sub, "rtml_9.9.tif"))
+    core <- hindcastCore(file.path(root, "hc"), "9.9", file.path(root, "in"))
+    expect_equal(as.vector(terra::values(core)), c(1, 1, NA, 1))
+  }
+})
