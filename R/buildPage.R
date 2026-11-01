@@ -23,10 +23,10 @@ observedRanks <- function(elf, minHa = 50) {
 #' @param elfs List of ELF inputs ([runWave1()]); `elf` is the id shown on the page.
 #' @param gates The `gates` table of [runWave1()] (its `ELF` values are the ids of `elfs`). Only G2, G4 and G6 are used.
 #' @param file Where to write the page. @param template Path of `pageTemplate.html`.
-#' @param subtitle One line under the title. @param label Name of the simulated series in the figures. @param minHa Escape size.
+#' @param title The page title (browser tab and heading). @param subtitle One line under the title. @param label Name of the simulated series in the figures. @param minHa Escape size.
 #' @param dpi Resolution of the inlined figures (80 keeps a 16-ELF page near 9 MB).
 #' @return `file`, invisibly.
-buildValidationPage <- function(elfs, gates, file, template, subtitle = "", label = "simulated", minHa = 50, dpi = 80) {
+buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa = 50, dpi = 80) {
   ids <- vapply(elfs, `[[`, "", "elf"); names(elfs) <- ids
   summ <- summariseGates(gates); summ$ELF <- as.character(summ$ELF)
   pl <- lapply(elfs, elfPlots, label = label, minHa = minHa)
@@ -50,6 +50,7 @@ buildValidationPage <- function(elfs, gates, file, template, subtitle = "", labe
   fill("/*ROWS*/[]", as.character(jsonlite::toJSON(rows, auto_unbox = TRUE)))
   fill("/*IMG*/{}", as.character(jsonlite::toJSON(img, auto_unbox = TRUE)))
   tpl <- gsub("__OVERVIEW__", overview, tpl, fixed = TRUE)
+  tpl <- gsub("__TITLE__", title, tpl, fixed = TRUE)
   tpl <- gsub("__SUBTITLE__", subtitle, tpl, fixed = TRUE); tpl <- gsub("__NGATES__", "3", tpl, fixed = TRUE)
   tpl <- gsub("__UPDATED__", format(Sys.time(), "%b %d, %H:%M"), tpl, fixed = TRUE)
   writeLines(tpl, file)

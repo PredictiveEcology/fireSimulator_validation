@@ -1,5 +1,7 @@
 # fireSimulator_validation (development version)
 
+* `buildValidationPage()` takes `title` (default `"Hindcast validation"`), used for the browser tab and the heading; the template no longer hard-codes "burnable fits".
+
 * `hindcastCore()` finds `rtml_<ELF>.tif` directly in `<inputsDir>/<ELF>/` (the GPSC layout) as well as in `<ELF>/NRV/370/1/`; scoring on the GPSC stopped with a missing file before.
 
 * `runTablesToELF()` builds an ELF input from plain per-run tables (fire sizes and ignitions per run-year), for simulators that do not write FireSense hindcast folders, e.g. a fast hindcast. `buildValidationPage()` writes the scores table, the observed-rank chart, the overview and the per-metric and per-ELF figures as one self-contained HTML file from `pageTemplate.html`.
