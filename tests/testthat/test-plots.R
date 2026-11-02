@@ -97,5 +97,7 @@ test_that("plotMetricPanel gives one pane per ELF in area-ratio order, for every
   expect_match(plotELFPanel(e1, s, plots = pl$toy)$patches$annotation$caption, "error bars.*x: observed|x: observed.*error bars")
   expect_error(plotMetricPanel(pl, s, "nope"))
   expect_equal(metricSize(14)$height, 4 * 5 + 2)
+  f <- tempfile(fileext = ".png")                                    # 43 ELFs: 62 inches, over ggsave's 50-inch limit
+  expect_no_error(do.call(ggplot2::ggsave, c(list(f, ggplot2::ggplot()), utils::modifyList(metricSize(43), list(dpi = 5)))))
   expect_equal(plotELFPanel(e1, s, plots = pl$toy)$patches$annotation$title, "ELF toy")
 })

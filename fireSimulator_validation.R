@@ -12,7 +12,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list(),
   documentation = list("README.md"),
-  reqdPkgs = list("data.table", "MASS", "withr", "ggplot2", "patchwork", "scales", "PredictiveEcology/fireSenseUtils@development (>= 0.2.3.9135)"),
+  reqdPkgs = list("data.table", "MASS", "withr", "ggplot2", "patchwork", "scales", "PredictiveEcology/fireSenseUtils@development (>= 0.2.3.9139)"),
   parameters = bindrows(
     defineParameter("nBoot", "integer", 999L, 1L, NA, "Bootstrap resamples of ELFs and years for the pooled verdicts."),
     defineParameter("nNull", "integer", 199L, 1L, NA, "Draws per year of the Anderson-Darling null."),
