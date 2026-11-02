@@ -54,9 +54,10 @@ test_that("summariseGates gives the five ratios of runWave1()'s gates and plotEL
   noWarn(plotELFPanel(e))
 })
 
-test_that("plotOverview orders ELFs by area ratio and builds without warnings", {
+test_that("plotOverview orders ELFs by burn rate and builds without warnings", {
   m <- function(r) { x <- list(); for (k in names(gateRatios)) x <- c(x, setNames(list(r, r / 2, r * 2, r / 2, r * 2), paste0(k, c("_ratio", "_lo", "_hi", "_runLo", "_runHi")))); x }
   s <- do.call(rbind, Map(function(id, r) data.frame(ELF = id, m(r)), c("a", "b", "c"), c(2, 0.5, 1)))
+  s$burnRate <- c(3, 0.1, 1)
   p <- plotOverview(s)
   expect_s3_class(p, "ggplot"); noWarn(p)
   expect_equal(levels(p$data$ELF), c("b", "c", "a"))
@@ -100,4 +101,10 @@ test_that("plotMetricPanel gives one pane per ELF in area-ratio order, for every
   f <- tempfile(fileext = ".png")                                    # 43 ELFs: 62 inches, over ggsave's 50-inch limit
   expect_no_error(do.call(ggplot2::ggsave, c(list(f, ggplot2::ggplot()), utils::modifyList(metricSize(43), list(dpi = 5)))))
   expect_equal(plotELFPanel(e1, s, plots = pl$toy)$patches$annotation$title, "ELF toy")
+})
+
+test_that("elfOrder orders by burn rate, lowest first, an ELF without one at the start (last from the top)", {
+  s <- data.frame(ELF = c("a", "b", "c", "d"), area_ratio = c(9, 1, 5, 2), burnRate = c(0.5, NA, 2, 0.1))
+  expect_equal(elfOrder(s), c("b", "d", "a", "c"))
+  expect_equal(elfOrder(s[, c("ELF", "area_ratio")]), c("a", "b", "c", "d"))        # no burnRate at all: input order
 })

@@ -133,13 +133,25 @@ readLedgerRow <- function(ledgerFile, elf) {
        p50 = if ("powerLawPc50_spread" %in% names(sp)) sp$powerLawPc50_spread[[i]] else NULL)
 }
 
+#' Burnable area and burn rate of an ELF
+#'
+#' The burn rate is the mean annual observed area burned over the record divided by the burnable area, in % per year (the
+#' conventional fire-cycle rate; its inverse is the fire cycle in years). The area is `area50` of `obsYears`, the area of
+#' the natural fires of 50 ha or more, the quantity the area plots and the area gate use; fires under 50 ha are not in the record's annual area.
+#' @param core Burnable-cell raster ([hindcastCore()]; NA = not burnable). @param obsYears `data.frame(year, area50)`, every observed year.
+#' @return `list(burnableHa, burnRate)`: area (ha) of the non-NA cells and the rate (% per year).
+burnRate <- function(core, obsYears) {
+  ha <- as.numeric(terra::global(!is.na(core), "sum")) * prod(terra::res(core)) / 1e4          # non-NA cells x cell area (the cores are projected, in m)
+  list(burnableHa = ha, burnRate = 100 * mean(obsYears$area50) / ha)
+}
+
 #' One ELF's hindcast as the input of [runWave1()]
 #'
 #' @param elf ELF name. @param hindcastDir `/mnt/fast/outputs/hindcast<ledgerSuffix>`. @param ledgerFile See [readLedgerRow()].
 #' @param nfdbPath,nbacPath Observation shapefiles. @param obsCacheDir Folder for the [observedRecord()] caches.
 #' @param years Scored years (only those with every set finished are used). @param sets Sets. @param inputsDir See [hindcastCore()].
 #' @param cores Forked workers for the observed record. @param fireCauses See [observedRecord()]; use the `fireCauses` the hindcast ran with.
-#' @return The list [runWave1()] documents; `NULL` if no year is finished.
+#' @return The list [runWave1()] documents, with `burnableHa` and `burnRate` ([burnRate()]); `NULL` if no year is finished.
 readFireSenseHindcast <- function(elf, hindcastDir, ledgerFile = NULL, nfdbPath, nbacPath, obsCacheDir,
                                   years = seq(1986L, 2021L, 5L), sets = 1:5, inputsDir = "/mnt/fast/inputs", cores = 1L, fireCauses = fireSenseUtils::fireSenseFireCauses) {
   done <- hindcastFinishedYears(hindcastDir, elf, years, sets)
@@ -151,6 +163,6 @@ readFireSenseHindcast <- function(elf, hindcastDir, ledgerFile = NULL, nfdbPath,
   obs <- readHindcastObserved(rec, hindcastDir, elf, done)
   fit <- if (is.null(ledgerFile)) list() else readLedgerRow(ledgerFile, elf)
   fit$fitAreaHa <- obs$fitAreaHa; fit$totalAreaHa <- obs$nbacAreaHa
-  c(list(elf = elf), sim, obs[c("obsYears", "obsSizes")],
+  c(list(elf = elf), sim, obs[c("obsYears", "obsSizes")], burnRate(core, obs$obsYears),
     list(covariate = readHindcastCovariate(hindcastDir, elf, core), fit = fit))
 }

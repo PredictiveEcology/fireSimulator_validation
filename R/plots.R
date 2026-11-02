@@ -238,8 +238,9 @@ plotELFPanel <- function(elf, summary = NULL, label = "simulated", minHa = 50, b
     theme(legend.position = "bottom", legend.text = element_text(size = 14))
 }
 
-## ELF ids ordered by area ratio, lowest first (the order of plotOverview(), bottom to top)
-elfOrder <- function(summary) as.character(summary$ELF)[order(summary$area_ratio, na.last = TRUE)]
+## ELF ids ordered by burn rate (`summary$burnRate`, %/yr, see [burnRate()]), lowest first (the order of plotOverview(), bottom to top); an ELF
+## without a burn rate (NA, or no such column) comes first here, so last when read from the top
+elfOrder <- function(summary) as.character(summary$ELF)[order(if (is.null(summary$burnRate)) rep(NA_real_, nrow(summary)) else summary$burnRate, na.last = FALSE)]
 
 metricCols <- 3L
 ## device size for [plotMetricPanel()]: about 4 inches per row of panes; past 36 ELFs that is over ggsave's 50-inch limit
@@ -247,11 +248,11 @@ metricSize <- function(n, ncol = metricCols) c(panelSize[names(panelSize) != "he
 
 #' One metric, every ELF: a pane per ELF
 #'
-#' The same plot of each ELF ([elfPlots()]), laid out in `ncol` columns, ordered by area ratio, highest first, as [plotOverview()] reads from the top; pane title =
+#' The same plot of each ELF ([elfPlots()]), laid out in `ncol` columns, ordered by burn rate, highest first, as [plotOverview()] reads from the top; pane title =
 #' ELF id, one shared legend and caption. Size: [metricSize()].
 #'
 #' @param plots Named list (names = ELF ids) of [elfPlots()].
-#' @param summary The wide gate summary ([summariseGates()]), for the order of the panes.
+#' @param summary The wide gate summary ([summariseGates()]) with a `burnRate` column, for the order of the panes ([elfOrder()]).
 #' @param metric One of `names(metrics)`: `areaByYear`, `annualArea`, `fireSizes`, `ignitions`, `escapes`.
 #' @param ncol Columns of panes.
 #' @return A patchwork object.
@@ -261,18 +262,18 @@ plotMetricPanel <- function(plots, summary, metric = names(metrics), ncol = metr
   p <- lapply(seq_along(ids), function(i) plots[[ids[i]]][[metric]] + labs(title = ids[i], subtitle = NULL, caption = NULL) +
                                           (if (i > 1) noLeg()))
   patchwork::wrap_plots(p, ncol = ncol) + patchwork::plot_layout(guides = "collect") +
-    patchwork::plot_annotation(title = paste0(metrics[[metric]], ": every ELF, highest area ratio first"), caption = plots[[ids[1]]][[metric]]$labels$caption, theme = panelTheme()) &
+    patchwork::plot_annotation(title = paste0(metrics[[metric]], ": every ELF, ordered by burn rate, highest first"), caption = plots[[ids[1]]][[metric]]$labels$caption, theme = panelTheme()) &
     theme(legend.position = "bottom", legend.text = element_text(size = 14))
 }
 
 #' All ELFs in one figure: the five gate ratios
 #'
 #' One facet per ratio (simulated / observed). Per ELF a point at the median run's ratio and a horizontal whisker over the 95%
-#' range of single runs (`runLo`, `runHi`), log x, a reference line at 1, ELFs ordered by area ratio. Ratios outside 0.01-100
+#' range of single runs (`runLo`, `runHi`), log x, a reference line at 1, ELFs ordered by burn rate, highest at the top ([elfOrder()]). Ratios outside 0.01-100
 #' are drawn at the limit.
 #'
 #' @param summary Wide table, one row per ELF, as [summariseGates()] returns: `ELF` and, for each of `area`, `top10_median`,
-#'   `ignitions`, `escapeRate`, `areaPerEscape`, the columns `<key>_ratio`, `<key>_runLo`, `<key>_runHi`.
+#'   `ignitions`, `escapeRate`, `areaPerEscape`, the columns `<key>_ratio`, `<key>_runLo`, `<key>_runHi`; and `burnRate` (%/yr, optional: ELFs without one are last).
 #' @param baseSize Base font size of the theme.
 #' @return A ggplot.
 plotOverview <- function(summary, baseSize = 15) {
@@ -286,7 +287,7 @@ plotOverview <- function(summary, baseSize = 15) {
     facet_wrap(~measure, nrow = 1) +
     scale_x_log10(breaks = c(0.01, 0.1, 1, 10, 100), labels = scales::label_comma()) +
     labs(title = "Hindcast against observed, all ELFs", subtitle = "simulated / observed: median run (dot) and 95% range of single runs (whisker); 1 = agreement",
-         x = "ratio (log scale)", y = "ELF (ordered by area ratio)", caption = "ratios outside 0.01-100 are drawn at the limit") +
+         x = "ratio (log scale)", y = "ELF (ordered by burn rate)", caption = "ratios outside 0.01-100 are drawn at the limit") +
     theme_bw(base_size = baseSize) + theme(plot.title = element_text(size = 22, face = "bold"), strip.text = element_text(size = 13), panel.grid.minor = element_blank())
 }
 
