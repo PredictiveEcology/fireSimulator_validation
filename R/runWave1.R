@@ -15,6 +15,7 @@
 #'   \item `simSizes`: `data.frame(year, run, ha)`, simulated fire sizes.
 #'   \item `obsYears`: `data.frame(year, ignitions, escapes, area50)`, the observed record, every year (scored years included).
 #'   \item `obsSizes`: `data.frame(year, ha)`, observed fire sizes, every year.
+#'   \item `burnableHa`, `burnRate`: burnable area (ha) and mean annual observed area burned over it (% per year, [burnRate()]); optional (NA = ordered last on the page).
 #'   \item `covariate`: `data.frame(year, value)`, the ELF median of the fit's climate covariate, every year.
 #'   \item `fit`: list with `objective` (ledger objective values), `pipelineObjective` (the same objective recomputed by the
 #'     pipeline, per replicate; `NULL` if not available), `pc` (`p_c` of each kept set) and `p50`, `fitAreaHa` (area of the

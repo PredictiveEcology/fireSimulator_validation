@@ -32,3 +32,17 @@ test_that("observedRanks compares the runs with the observed record of the score
   rk <- observedRanks(toyElf(perfect = TRUE))                        # every run is the observed history: ties, rank 0.5
   expect_equal(unname(rk), rep(0.5, 5))
 })
+
+test_that("the page carries each ELF's burn rate, sorts by it by default and puts an ELF without one last", {
+  skip_if_not_installed("jsonlite")
+  e1 <- toyElf(seed = 3, name = "a-x"); e2 <- toyElf(seed = 5, name = "b-y"); e3 <- toyElf(seed = 7, name = "c-z")
+  e1$burnRate <- 0.2; e2$burnRate <- 1.5                                         # e3 has none
+  g <- do.call(rbind, lapply(list(e1, e2, e3), function(x) cbind(ELF = x$elf, runGates(x, nBoot = 20))))
+  f <- tempfile(fileext = ".html")
+  buildValidationPage(list(e1, e2, e3), g, f, testthat::test_path("..", "..", "pageTemplate.html"), dpi = 30)
+  h <- paste(readLines(f, warn = FALSE), collapse = "\n")
+  rows <- jsonlite::fromJSON(sub(";.*", "", sub(".*const ROWS = ", "", h)), simplifyVector = FALSE)
+  expect_equal(lapply(rows, `[[`, "burnRate"), list(0.2, 1.5, NULL), ignore_attr = TRUE)
+  expect_match(h, 'let sortK = "burnRate", sortD = -1', fixed = TRUE)
+  expect_match(h, 'data-k="burnRate">Burned %/yr', fixed = TRUE)
+})

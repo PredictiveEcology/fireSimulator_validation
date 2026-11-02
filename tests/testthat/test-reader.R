@@ -111,3 +111,11 @@ test_that("hindcastCore finds the core raster with or without the NRV folders", 
     expect_equal(as.vector(terra::values(core)), c(1, 1, NA, 1))
   }
 })
+
+test_that("burnRate is the mean annual observed area over the burnable area, in % per year", {
+  core <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 10000, ymin = 0, ymax = 10000, crs = "EPSG:3978")   # 1000 m cells = 100 ha
+  core <- terra::setValues(core, ifelse(seq_len(100) <= 40, 1, NA))                                                 # 40 burnable cells
+  b <- burnRate(core, data.frame(year = 2000:2003, area50 = c(0, 4, 0, 4)))
+  expect_equal(b$burnableHa, 40 * 1000^2 / 1e4)                           # cells are 1000 m: 100 ha each
+  expect_equal(b$burnRate, 100 * 2 / b$burnableHa)
+})

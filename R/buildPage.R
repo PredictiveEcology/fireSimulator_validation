@@ -17,8 +17,8 @@ observedRanks <- function(elf, minHa = 50) {
 #' The validation page
 #'
 #' Draws the figures of [plotELFPanel()], [plotOverview()] and [plotMetricPanel()] and writes one HTML file with the images
-#' inside it (no other files to publish): a sortable table of the five gate ratios with the spread of single runs and the
-#' observed rank, a chart of the observed ranks, the overview, one figure per metric and one per ELF. The layout is
+#' inside it (no other files to publish): a sortable table (default: burn rate, highest first) of the burn rate and the five gate ratios with the spread of single runs and the
+#' observed rank, a chart of the observed ranks, the overview, one figure per metric and one per ELF, the ELFs ordered by burn rate ([elfOrder()]). The layout is
 #' `pageTemplate.html` of the module.
 #'
 #' @param elfs List of ELF inputs ([runWave1()]); `elf` is the id shown on the page.
@@ -30,6 +30,7 @@ observedRanks <- function(elf, minHa = 50) {
 buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa = 50, dpi = 80) {
   ids <- vapply(elfs, `[[`, "", "elf"); names(elfs) <- ids
   summ <- summariseGates(gates); summ$ELF <- as.character(summ$ELF)
+  summ$burnRate <- vapply(elfs[summ$ELF], function(e) e$burnRate %||% NA_real_, 0)      # for elfOrder(); an ELF input without one sorts last
   pl <- lapply(elfs, elfPlots, label = label, minHa = minHa)
   tmp <- tempfile("page"); dir.create(tmp)
   save <- function(p, name, size) {
@@ -43,12 +44,12 @@ buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast v
   g <- gates[gates$gate %in% c("G2", "G4", "G6"), ]
   rows <- lapply(ids, function(id) {
     z <- summ[summ$ELF == id, ]; gi <- g[g$ELF == id, ]; rk <- observedRanks(elfs[[id]], minHa)
-    r <- list(elf = id, gates = sum(gi$pass %in% TRUE), failed = paste(gi$gate[gi$pass %in% FALSE], collapse = " "))
+    r <- list(elf = id, burnRate = z$burnRate, gates = sum(gi$pass %in% TRUE), failed = paste(gi$gate[gi$pass %in% FALSE], collapse = " "))
     for (k in names(key)) r[[k]] <- round(c(z[[paste0(key[k], "_ratio")]], z[[paste0(key[k], "_runLo")]], z[[paste0(key[k], "_runHi")]], rk[[k]]), 3)
     r })
   tpl <- paste(readLines(template, warn = FALSE), collapse = "\n")
   fill <- function(pat, val) tpl <<- sub(pat, val, tpl, fixed = TRUE)
-  fill("/*ROWS*/[]", as.character(jsonlite::toJSON(rows, auto_unbox = TRUE)))
+  fill("/*ROWS*/[]", as.character(jsonlite::toJSON(rows, auto_unbox = TRUE, na = "null")))
   fill("/*IMG*/{}", as.character(jsonlite::toJSON(img, auto_unbox = TRUE)))
   tpl <- gsub("__OVERVIEW__", overview, tpl, fixed = TRUE)
   tpl <- gsub("__TITLE__", title, tpl, fixed = TRUE)

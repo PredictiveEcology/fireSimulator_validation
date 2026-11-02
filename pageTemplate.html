@@ -96,6 +96,7 @@ td a:hover { text-decoration: underline; }
         <table>
           <thead><tr>
             <th><button type="button" data-k="elf">ELF</button></th>
+            <th><button type="button" data-k="burnRate">Burned %/yr</button></th>
             <th><button type="button" data-k="area">Area burned</button></th>
             <th><button type="button" data-k="top10">10 largest fires</button></th>
             <th><button type="button" data-k="ign">Ignitions</button></th>
@@ -121,7 +122,7 @@ td a:hover { text-decoration: underline; }
     </section>
 
     <section id="metric">
-      <h2>By metric <small>one pane per ELF, highest area ratio first</small></h2>
+      <h2>By metric <small>one pane per ELF, highest burn rate first</small></h2>
       <div class="seg" id="segMetric" role="group" aria-label="Metric"></div>
       <a class="fig" id="metricLink" href="#"><img id="metricImg" alt="" width="1760" height="2420"></a>
     </section>
@@ -150,8 +151,9 @@ const COLS = ["area", "top10", "ign", "esc", "ape"];
 const NAMES = { area: "area", top10: "10 largest", ign: "ignitions", esc: "escape rate", ape: "area/escape" };
 const slug = e => "elf-" + e.replace(/\./g, "_");
 const f2 = v => v.toFixed(2);
-const byArea = ROWS.slice().sort((a, b) => b.area[0] - a.area[0]);
-let sortK = "area", sortD = -1, metric = METRICS[0][0], elf = byArea.length ? byArea[0].elf : null;
+const num = (a, b, d) => a == null || b == null ? (a == null) - (b == null) : d * (a - b);   // a missing value sorts last, whichever way
+const byRate = ROWS.slice().sort((a, b) => num(a.burnRate, b.burnRate, -1));
+let sortK = "burnRate", sortD = -1, metric = METRICS[0][0], elf = byRate.length ? byRate[0].elf : null;
 
 document.getElementById("nElf").textContent = ROWS.length;
 
@@ -194,9 +196,9 @@ function renderRank() {
 renderRank();
 
 function renderRows() {
-  const v = r => sortK === "elf" ? r.elf : sortK === "gates" ? r.gates : r[sortK][0];
+  const v = r => sortK === "gates" ? r.gates : sortK === "burnRate" ? r.burnRate : r[sortK][0];
   const s = ROWS.slice().sort((a, b) => sortK === "elf"
-    ? sortD * a.elf.localeCompare(b.elf, "en", { numeric: true }) : sortD * (v(a) - v(b)));
+    ? sortD * a.elf.localeCompare(b.elf, "en", { numeric: true }) : num(v(a), v(b), sortD));
   document.getElementById("rows").innerHTML = s.map(r => {
     const cells = COLS.map(k => {
       const [m, lo, hi, rk] = r[k], out = hi < 1 || lo > 1;
@@ -205,7 +207,8 @@ function renderRows() {
         `<span class="v">${f2(m)}</span><span class="r">${f2(lo)}&ndash;${f2(hi)}</span>${rank}</td>`;
     }).join("");
     const g = `${r.gates}/__NGATES__${r.failed ? `<span class="chip">${r.failed}</span>` : ""}`;
-    return `<tr><td><a href="#${slug(r.elf)}">${r.elf}</a></td>${cells}<td>${g}</td></tr>`;
+    const br = r.burnRate == null ? "" : r.burnRate.toPrecision(2);
+    return `<tr><td><a href="#${slug(r.elf)}">${r.elf}</a></td><td><span class="v">${br}</span></td>${cells}<td>${g}</td></tr>`;
   }).join("");
   document.querySelectorAll("th button").forEach(b => {
     if (b.dataset.k === sortK) b.setAttribute("aria-sort", sortD > 0 ? "ascending" : "descending");
@@ -241,11 +244,11 @@ function markNav() {
 
 document.getElementById("segMetric").innerHTML = METRICS.map(([m, l]) => `<button type="button" data-m="${m}">${l}</button>`).join("");
 document.getElementById("navMetric").innerHTML = METRICS.map(([m, l]) => `<a href="#metric-${m}" data-m="${m}">${l}</a>`).join("");
-document.getElementById("segElf").innerHTML = byArea.map(r => `<button type="button" class="elf" data-e="${r.elf}">${r.elf}</button>`).join("");
-document.getElementById("navElf").innerHTML = byArea.map(r => `<a class="elf" href="#${slug(r.elf)}" data-e="${r.elf}">${r.elf}</a>`).join("");
+document.getElementById("segElf").innerHTML = byRate.map(r => `<button type="button" class="elf" data-e="${r.elf}">${r.elf}</button>`).join("");
+document.getElementById("navElf").innerHTML = byRate.map(r => `<a class="elf" href="#${slug(r.elf)}" data-e="${r.elf}">${r.elf}</a>`).join("");
 document.querySelectorAll("#segMetric button").forEach(b => b.addEventListener("click", () => setMetric(b.dataset.m)));
 document.querySelectorAll("#segElf button").forEach(b => b.addEventListener("click", () => setElf(b.dataset.e)));
-const step = d => { const i = byArea.findIndex(r => r.elf === elf); setElf(byArea[(i + d + byArea.length) % byArea.length].elf); };
+const step = d => { const i = byRate.findIndex(r => r.elf === elf); setElf(byRate[(i + d + byRate.length) % byRate.length].elf); };
 document.getElementById("prev").addEventListener("click", () => step(-1));
 document.getElementById("next").addEventListener("click", () => step(1));
 
