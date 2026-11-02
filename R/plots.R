@@ -242,8 +242,8 @@ plotELFPanel <- function(elf, summary = NULL, label = "simulated", minHa = 50, b
 elfOrder <- function(summary) as.character(summary$ELF)[order(summary$area_ratio, na.last = TRUE)]
 
 metricCols <- 3L
-## device size for [plotMetricPanel()]: about 4 inches per row of panes
-metricSize <- function(n, ncol = metricCols) c(panelSize[names(panelSize) != "height"], list(height = 4 * ceiling(n / ncol) + 2))
+## device size for [plotMetricPanel()]: about 4 inches per row of panes; past 36 ELFs that is over ggsave's 50-inch limit
+metricSize <- function(n, ncol = metricCols) c(panelSize[names(panelSize) != "height"], list(height = 4 * ceiling(n / ncol) + 2, limitsize = FALSE))
 
 #' One metric, every ELF: a pane per ELF
 #'

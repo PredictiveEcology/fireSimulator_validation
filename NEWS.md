@@ -1,5 +1,9 @@
 # fireSimulator_validation (development version)
 
+* The per-metric figures of `buildValidationPage()` (about 4 inches per row of three ELFs) are saved with `limitsize = FALSE`; with more than 36 ELFs ggsave refused them (over 50 inches) and the page was not written.
+
+* Needs fireSenseUtils >= 0.2.3.9139: the observed-fire overlay of a very fragmented ELF core (5.1.2, 5.1.3) took hours per ELF before.
+
 * `buildValidationPage()` takes `title` (default `"Hindcast validation"`), used for the browser tab and the heading; the template no longer hard-codes "burnable fits".
 
 * `hindcastCore()` finds `rtml_<ELF>.tif` directly in `<inputsDir>/<ELF>/` (the GPSC layout) as well as in `<ELF>/NRV/370/1/`; scoring on the GPSC stopped with a missing file before.
