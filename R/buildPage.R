@@ -2,7 +2,8 @@
 
 ## where the observed record ranks among the single runs (mid-rank percentile, 0-1), for the five ratios of the gates
 observedRanks <- function(elf, minHa = 50) {
-  sy <- elf$simYears; ob <- elf$obsYears; os <- elf$obsSizes[elf$obsSizes$ha >= minHa, ]
+  sy <- elf$simYears; ob <- elf$obsYears[elf$obsYears$year %in% sy$year, ]     # the record has every year; the runs only the scored ones
+  os <- elf$obsSizes[elf$obsSizes$ha >= minHa & elf$obsSizes$year %in% sy$year, ]
   rank <- function(v, o) mean(v < o) + 0.5 * mean(v == o)
   top10 <- function(x) if (length(x)) stats::median(utils::head(sort(x, TRUE), 10L)) else 0
   run <- stats::aggregate(cbind(ignitions, escapes, area50) ~ run, sy, sum)

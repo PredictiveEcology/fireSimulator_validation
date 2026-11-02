@@ -27,3 +27,8 @@ test_that("buildValidationPage writes one file with the rows, the ranks and the 
   rk <- observedRanks(e1)
   expect_true(all(rk >= 0 & rk <= 1)); expect_named(rk, c("area", "top10", "ign", "esc", "ape"))
 })
+
+test_that("observedRanks compares the runs with the observed record of the scored years only", {
+  rk <- observedRanks(toyElf(perfect = TRUE))                        # every run is the observed history: ties, rank 0.5
+  expect_equal(unname(rk), rep(0.5, 5))
+})

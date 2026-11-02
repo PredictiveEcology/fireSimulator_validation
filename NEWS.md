@@ -1,5 +1,7 @@
 # fireSimulator_validation (development version)
 
+* `observedRanks()` (the page's "obs N%" and observed-rank chart) compares the runs with the observed record of the scored years only. It summed the whole record (1986-2024) against the runs' 8 hindcast years, so the observed record ranked above nearly every run.
+
 * The per-metric figures of `buildValidationPage()` (about 4 inches per row of three ELFs) are saved with `limitsize = FALSE`; with more than 36 ELFs ggsave refused them (over 50 inches) and the page was not written.
 
 * Needs fireSenseUtils >= 0.2.3.9139: the observed-fire overlay of a very fragmented ELF core (5.1.2, 5.1.3) took hours per ELF before.
