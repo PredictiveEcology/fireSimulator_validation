@@ -26,19 +26,32 @@ observedRanks <- function(elf, minHa = 50) {
 #' @param file Where to write the page. @param template Path of `pageTemplate.html`.
 #' @param title The page title (browser tab and heading). @param subtitle One line under the title. @param label Name of the simulated series in the figures. @param minHa Escape size.
 #' @param dpi Resolution of the inlined figures (80 keeps a 16-ELF page near 9 MB).
+#' @param map `NULL` (default: no maps) or a function `(values, title, file)` that draws a map of the ELFs, filled by
+#'   `values` (named by ELF id, 0-1), into the PNG `file`. Each metric with a per-year value ([coverageOfMetric]) then
+#'   gets a map of [yearCoverage()] above its figure. The drawing is the caller's: this module knows no ELF geometry.
 #' @return `file`, invisibly.
-buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa = 50, dpi = 80) {
+buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa = 50, dpi = 80,
+                                map = NULL) {
   ids <- vapply(elfs, `[[`, "", "elf"); names(elfs) <- ids
   summ <- summariseGates(gates); summ$ELF <- as.character(summ$ELF)
   summ$burnRate <- vapply(elfs[summ$ELF], function(e) e$burnRate %||% NA_real_, 0)      # for elfOrder(); an ELF input without one sorts last
   pl <- lapply(elfs, elfPlots, label = label, minHa = minHa)
   tmp <- tempfile("page"); dir.create(tmp)
+  dataUri <- function(f) paste0("data:image/png;base64,", gsub("\n", "", jsonlite::base64_enc(readBin(f, "raw", file.size(f))), fixed = TRUE))
   save <- function(p, name, size) {
     size$dpi <- dpi; f <- file.path(tmp, paste0(name, ".png")); do.call(ggplot2::ggsave, c(list(f, p), size))
-    paste0("data:image/png;base64,", gsub("\n", "", jsonlite::base64_enc(readBin(f, "raw", file.size(f))), fixed = TRUE))
+    dataUri(f)
   }
   img <- c(stats::setNames(lapply(ids, function(id) save(plotELFPanel(elfs[[id]], summ, label, minHa, plots = pl[[id]]), paste0("panel_", id), panelSize)), paste0("panel_", ids)),
            stats::setNames(lapply(names(metrics), function(m) save(plotMetricPanel(pl, summ, m), paste0("metric_", m), metricSize(length(pl)))), paste0("metric_", names(metrics))))
+  if (is.function(map)) {
+    cov <- do.call(rbind, lapply(elfs, yearCoverage)); rownames(cov) <- ids
+    for (m in names(coverageOfMetric)) {
+      f <- file.path(tmp, paste0("map_", m, ".png"))
+      map(cov[, coverageOfMetric[[m]]], paste0(metrics[[m]], ": share of years with observed inside the runs' 95% range"), f)
+      img[[paste0("map_", m)]] <- dataUri(f)
+    }
+  }
   overview <- save(plotOverview(summ), "overview", overviewSize)
   key <- c(area = "area", top10 = "top10_median", ign = "ignitions", esc = "escapeRate", ape = "areaPerEscape")
   g <- gates[gates$gate %in% c("G2", "G4", "G6"), ]

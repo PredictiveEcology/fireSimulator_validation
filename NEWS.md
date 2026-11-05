@@ -1,5 +1,7 @@
 # fireSimulator_validation (development version)
 
+* The validation page can show a map of the ELFs above each per-year metric (area burned, annual area, ignitions, escapes), each ELF filled by `yearCoverage()`: the share of its hindcast years whose observed value lies inside the 95% range of that year's runs (about 95% for a calibrated model). `buildValidationPage(map = )` takes the function that draws the map; without one the page is as before.
+
 * The hindcast validation page orders ELFs by observed burn rate, most burned at the top: the scores table has a "Burned %/yr" column (the default sort, descending), the ELF picker and the first ELF shown follow it, and `elfOrder()` (so `plotOverview()` and `plotMetricPanel()`) orders by `burnRate` instead of the area ratio. `burnRate()` is the mean annual observed area (`area50`, natural fires of 50 ha or more, as the area plots) over the burnable area of the core, in % per year; `readFireSenseHindcast()` adds `burnableHa` and `burnRate` to the ELF input. An ELF input without `burnRate` sorts last.
 
 * `observedRanks()` (the page's "obs N%" and observed-rank chart) compares the runs with the observed record of the scored years only. It summed the whole record (1986-2024) against the runs' 8 hindcast years, so the observed record ranked above nearly every run.

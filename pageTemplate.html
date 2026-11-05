@@ -124,6 +124,8 @@ td a:hover { text-decoration: underline; }
     <section id="metric">
       <h2>By metric <small>one pane per ELF, highest burn rate first</small></h2>
       <div class="seg" id="segMetric" role="group" aria-label="Metric"></div>
+      <a class="fig" id="mapLink" href="#" hidden><img id="mapImg" alt="" width="800" height="640"></a>
+      <p class="note" id="mapNote" hidden>Each ELF is filled by the share of its hindcast years in which the observed value lies inside the 95% range of that year's runs. A calibrated model fills about 95%.</p>
       <a class="fig" id="metricLink" href="#"><img id="metricImg" alt="" width="1760" height="2420"></a>
     </section>
 
@@ -225,6 +227,9 @@ function setMetric(m) {
   const img = document.getElementById("metricImg");
   img.src = src; img.alt = METRICS.find(x => x[0] === m)[1] + ", one pane per ELF";
   document.getElementById("metricLink").href = src;
+  const map = IMG["map_" + m], mapLink = document.getElementById("mapLink");
+  mapLink.hidden = !map; document.getElementById("mapNote").hidden = !map;
+  if (map) { document.getElementById("mapImg").src = map; document.getElementById("mapImg").alt = "Map of the ELFs: " + METRICS.find(x => x[0] === m)[1] + ", share of years inside the runs' 95% range"; mapLink.href = map; }
   document.querySelectorAll("#segMetric button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === m)));
   markNav();
 }
