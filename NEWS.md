@@ -1,5 +1,7 @@
 # fireSimulator_validation (development version)
 
+* The module scores fireSense hindcasts on its own: with `hindcastPath` set and no `validationELFs` supplied, `.inputObjects` reads every ELF of `hindcastPath` that has finished all `hindcastYears` with `readFireSenseHindcast()` (parameters `hindcastSets`, `skipELFs`, `inputsPath`, `ledgerSuffix`, `nCores`; observed-record caches in `<outputPath>/obs`). `init` writes `wave1.rds`, `wave1_results.csv` and `validation.html` (`pageTitle`, `pageSubtitle`, `pageDpi`) to `outputPath`. This replaces the scoring code in FireSenseTesting's `global.R`. Adds `jsonlite`, `terra` and `fireregimetools` to `reqdPkgs` (already used).
+
 * The hindcast validation page orders ELFs by observed burn rate, most burned at the top: the scores table has a "Burned %/yr" column (the default sort, descending), the ELF picker and the first ELF shown follow it, and `elfOrder()` (so `plotOverview()` and `plotMetricPanel()`) orders by `burnRate` instead of the area ratio. `burnRate()` is the mean annual observed area (`area50`, natural fires of 50 ha or more, as the area plots) over the burnable area of the core, in % per year; `readFireSenseHindcast()` adds `burnableHa` and `burnRate` to the ELF input. An ELF input without `burnRate` sorts last.
 
 * `observedRanks()` (the page's "obs N%" and observed-rank chart) compares the runs with the observed record of the scored years only. It summed the whole record (1986-2024) against the runs' 8 hindcast years, so the observed record ranked above nearly every run.

@@ -1,8 +1,10 @@
 # fireSimulator_validation
 
 A SpaDES module that scores a fire simulator against observed fire. The scoring functions in `R/` are
-model-agnostic: they take plain tables (and rasters) only, so any simulator can use them. The module file just
-calls `runWave1()`.
+model-agnostic: they take plain tables (and rasters) only, so any simulator can use them. The module file
+calls `runWave1()` on `validationELFs` and writes `wave1.rds`, `wave1_results.csv` and `validation.html` to its
+`outputPath`. A fireSense hindcast needs no `validationELFs`: set `hindcastPath`, `hindcastYears`, `inputsPath` and
+`ledgerSuffix`, and `.inputObjects` reads every ELF that has finished all its years.
 
 Wave 1 of the hindcast test plan:
 
