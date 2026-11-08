@@ -1,5 +1,5 @@
 ## The module run on a toy fireSense hindcast: .inputObjects reads it (readFireSenseHindcast()), init scores it and writes
-## wave1.rds, wave1_results.csv and validation.html to outputPath. Toy ELF: see helper-source.R.
+## wave1.rds, wave1_results.csv and validation.html to outputPath, and its figures through Plots(). Toy ELF: see helper-source.R.
 
 ## The hindcast folders, inputs and observed-record cache of toyElf(): set 1 of every scored year, a 10 x 10 core.
 toyHindcastFiles <- function(e, root) {
@@ -45,7 +45,7 @@ test_that("the module reads a fireSense hindcast and writes wave1.rds, wave1_res
     times = list(start = 0, end = 1), modules = "fireSimulator_validation",
     params = list(fireSimulator_validation = list(hindcastPath = hc, hindcastYears = sort(unique(e$simYears$year)),
                                                   inputsPath = file.path(root, "inputs"), ledgerSuffix = "_suffix",
-                                                  nBoot = 20L, nNull = 19L, nPerm = 99L, .plots = NA, pageTitle = "Toy page")),
+                                                  nBoot = 20L, nNull = 19L, nPerm = 99L, .plots = "png", pageTitle = "Toy page")),
     paths = list(modulePath = mp, outputPath = out, inputPath = file.path(root, "inputs"),
                  cachePath = file.path(root, "cache"), scratchPath = file.path(root, "scratch")))
   expect_equal(vapply(sim$validationELFs, `[[`, "", "elf"), "9.9")
@@ -55,4 +55,6 @@ test_that("the module reads a fireSense hindcast and writes wave1.rds, wave1_res
   expect_equal(nrow(utils::read.csv(file.path(out, "wave1_results.csv"))), nrow(sim$validationResults$results))
   h <- paste(readLines(file.path(out, "validation.html"), warn = FALSE), collapse = "\n")
   expect_match(h, "<title>Toy page</title>", fixed = TRUE); expect_match(h, "\"panel_9.9\"", fixed = TRUE)
+  ## Plots() took ".9" of "9.9" as an extension: the panels of 11.3 and 11.4 were both written to panel_11.png
+  expect_true(file.exists(file.path(out, "figures", "fireSimulator_validation", "panel_9_9.png")))
 })

@@ -77,7 +77,7 @@ doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
                             vapply(sim$validationELFs, `[[`, "", "elf"))
       for (e in sim$validationELFs)
         Plots(data = e, fn = plotELFPanel, summary = summ, label = P(sim)$simLabel, minHa = P(sim)$minHa, plots = pl[[e$elf]],
-              filename = paste0("panel_", e$elf), ggsaveArgs = panelSize)
+              filename = paste0("panel_", gsub(".", "_", e$elf, fixed = TRUE)), ggsaveArgs = panelSize) # Plots() takes ".3" of "11.3" as an extension
       Plots(data = summ, fn = plotOverview, filename = "overview", ggsaveArgs = overviewSize)
       for (m in names(metrics))
         Plots(data = pl, fn = plotMetricPanel, summary = summ, metric = m,
