@@ -6,7 +6,7 @@ test_that("crpsEnsemble on log(1 + x) reproduces the prototype's per ELF-year CR
   skip_if_not(file.exists(file.path(P, "eval_boundfix/new/perELFyear.csv")) && dir.exists(H))
   old <- data.table::fread(file.path(P, "eval_boundfix/new/perELFyear.csv"))
   yrs <- seq(1986L, 2021L, 5L); e <- "6.6.1"
-  s <- readHindcastSim(H, e, hindcastFinishedYears(H, e, yrs), 1:5)$simYears
+  s <- readHindcastSim(H, e, hindcastFinishedYears(H, e, yrs), 1:5, minHa = 50)$simYears
   o <- do.call(rbind, lapply(yrs, function(y) as.data.frame(data.table::fread(file.path(H, e, y, 1, "hindcast_observed.csv")))))
   for (q in c("ignitions", "nFires50")) {
     col <- if (q == "nFires50") "escapes" else q
@@ -21,8 +21,8 @@ test_that("scoreSizesVsNull reproduces the prototype's pooled Anderson-Darling o
   HP <- "/mnt/fast/outputs/hindcast_powerLaw_rep87"; yrs <- seq(1986L, 2021L, 5L); e <- "6.6.1"
   pp <- data.table::fread(file.path(P, "metrics/powerLaw661/out/all_sizesPooled.csv"))
   pp <- pp[grepl("^Power law", pp$model) & pp$null == "history" & pp$ELF == e, ]
-  s <- readHindcastSim(HP, e, hindcastFinishedYears(HP, e, yrs), 1:5)$simSizes
+  s <- readHindcastSim(HP, e, hindcastFinishedYears(HP, e, yrs), 1:5, minHa = 50)$simSizes
   ob <- do.call(rbind, lapply(yrs, function(y) { x <- data.table::fread(file.path(HP, e, y, 1, "hindcast_observedSizes.csv")); h <- x$ha[x$cause == "natural"]; data.frame(year = rep(y, length(h)), ha = h) }))
-  r <- scoreSizesVsNull(s, ob, ob, nNull = 19, nulls = "history")$pooled
+  r <- scoreSizesVsNull(s, ob, ob, 50, nNull = 19, nulls = "history")$pooled
   expect_equal(r$adModel, pp$adModel, tolerance = 1e-6)
 })

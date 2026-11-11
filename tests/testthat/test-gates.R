@@ -101,7 +101,7 @@ test_that("the interval narrows as runs increase, and the pass rule does not use
 })
 
 test_that("runWave1 gates table has lo and hi", {
-  r <- runWave1(list(toyElf("a")), nBoot = 20, nNull = 5, nPerm = 99)
+  r <- runWave1(list(toyElf("a")), minHa = toyMinHa, nBoot = 20, nNull = 5, nPerm = 99)
   expect_true(all(c("lo", "hi") %in% names(r$gates)))
 })
 
@@ -116,7 +116,7 @@ test_that("gates G2, G4 and G6 report runLo and runHi, the spread of single runs
   expect_true(is.na(gateG1(c(100, 101, 99), 100)$runLo))
   g <- runGates(toyElf("t")); expect_true(all(c("runLo", "runHi") %in% names(g)))
   expect_true(all(is.finite(g$runLo[g$gate %in% c("G2", "G4", "G6")])))
-  expect_true(all(c("runLo", "runHi") %in% names(runWave1(list(toyElf("a")), nBoot = 20, nNull = 5, nPerm = 99)$gates)))
+  expect_true(all(c("runLo", "runHi") %in% names(runWave1(list(toyElf("a")), minHa = toyMinHa, nBoot = 20, nNull = 5, nPerm = 99)$gates)))
 })
 
 test_that("the single-run range is each run's own ratio and widens with between-run variance", {

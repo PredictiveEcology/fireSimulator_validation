@@ -20,7 +20,7 @@ seriesStyle <- function(label) {
 }
 
 ## The tables every figure draws on. `grid`: one row per simulated run-year. Areas and sizes are of fires of `minHa` or more.
-hindcastSeries <- function(elf, minHa = 50) {
+hindcastSeries <- function(elf, minHa) {
   sy <- elf$simYears; yrs <- sort(unique(sy$year))
   grid <- unique(sy[, c("year", "run")]); grid <- grid[order(grid$run, grid$year), ]
   key <- function(d) paste(d$year, d$run)
@@ -123,7 +123,7 @@ runCaption <- "thin lines: single runs; shaded: 95% range across single runs"
 #' @param minHa Smallest fire counted (ha).
 #' @param baseSize Base font size of the theme.
 #' @return A ggplot.
-plotAreaByYear <- function(elf, label = "simulated", minHa = 50, baseSize = 15) {
+plotAreaByYear <- function(elf, label = "simulated", minHa, baseSize = 15) {
   s <- hindcastSeries(elf, minHa); st <- seriesStyle(label)
   q <- do.call(rbind, lapply(split(s$grid$area, s$grid$year), function(a)
     data.frame(med = stats::median(a), lo = stats::quantile(a, 0.1, names = FALSE), hi = stats::quantile(a, 0.9, names = FALSE))))
@@ -144,7 +144,7 @@ plotAreaByYear <- function(elf, label = "simulated", minHa = 50, baseSize = 15) 
 #'
 #' @inheritParams plotAreaByYear
 #' @param showElf Put the ELF id in the subtitle (the panel has it in its title).
-plotAnnualAreaDensity <- function(elf, label = "simulated", minHa = 50, baseSize = 15, showElf = TRUE) {
+plotAnnualAreaDensity <- function(elf, label = "simulated", minHa, baseSize = 15, showElf = TRUE) {
   s <- hindcastSeries(elf, minHa); st <- seriesStyle(label)
   zero <- sprintf("years with none: observed %.0f%%, %s %.0f%%", 100 * mean(s$obsYears$area == 0), label, 100 * mean(s$grid$area == 0))
   dens(s$obsYears$area, byRun(s$grid$area, s$grid$run), st, "area burned per year (ha, log scale)", lower = minHa,
@@ -158,7 +158,7 @@ plotAnnualAreaDensity <- function(elf, label = "simulated", minHa = 50, baseSize
 #' ribbon their pointwise 95% range, ticks the observed fires. A run without such fires has no line.
 #'
 #' @inheritParams plotAreaByYear
-plotFireSizes <- function(elf, label = "simulated", minHa = 50, baseSize = 15) {
+plotFireSizes <- function(elf, label = "simulated", minHa, baseSize = 15) {
   s <- hindcastSeries(elf, minHa); st <- seriesStyle(label)
   runs <- split(s$simSizes$ha, factor(s$simSizes$run, unique(s$grid$run)))
   dens(s$obsSizes$ha, runs, st, "fire size (ha, log scale)", lower = minHa, title = "Fire sizes",
@@ -212,7 +212,7 @@ unionCaption <- function(captions) paste(strwrap(paste(unique(unlist(strsplit(ca
 #'
 #' @inheritParams plotAreaByYear
 #' @return Named list of ggplots: `areaByYear`, `annualArea`, `fireSizes`, `ignitions`, `escapes`.
-elfPlots <- function(elf, label = "simulated", minHa = 50, baseSize = 15)
+elfPlots <- function(elf, label = "simulated", minHa, baseSize = 15)
   list(areaByYear = plotAreaByYear(elf, label, minHa, baseSize), annualArea = plotAnnualAreaDensity(elf, label, minHa, baseSize, showElf = FALSE),
        fireSizes = plotFireSizes(elf, label, minHa, baseSize), ignitions = plotIgnitions(elf, label, baseSize), escapes = plotEscapes(elf, label, baseSize))
 
@@ -226,7 +226,7 @@ elfPlots <- function(elf, label = "simulated", minHa = 50, baseSize = 15)
 #' @param summary The wide gate summary ([summariseGates()]); the row of `elf$elf` gives the ratios in the subtitle. Without it there is no subtitle.
 #' @param plots [elfPlots()] of `elf`, to lay out plots already built.
 #' @return A patchwork object.
-plotELFPanel <- function(elf, summary = NULL, label = "simulated", minHa = 50, baseSize = 15, plots = elfPlots(elf, label, minHa, baseSize)) {
+plotELFPanel <- function(elf, summary = NULL, label = "simulated", minHa, baseSize = 15, plots = elfPlots(elf, label, minHa, baseSize)) {
   bare <- labs(subtitle = NULL, caption = NULL)
   p <- list(plots$areaByYear + bare + noLeg(), plots$annualArea + labs(caption = NULL), plots$fireSizes + bare + noLeg(),
             plots$ignitions + bare + noLeg(), plots$escapes + bare + noLeg())

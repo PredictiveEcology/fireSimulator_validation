@@ -1,7 +1,7 @@
 ## One self-contained HTML page of the validation: scores table, observed rank, overview, a figure per metric and per ELF.
 
 ## where the observed record ranks among the single runs (mid-rank percentile, 0-1), for the five ratios of the gates
-observedRanks <- function(elf, minHa = 50) {
+observedRanks <- function(elf, minHa) {
   sy <- elf$simYears; ob <- elf$obsYears[elf$obsYears$year %in% sy$year, ]     # the record has every year; the runs only the scored ones
   os <- elf$obsSizes[elf$obsSizes$ha >= minHa & elf$obsSizes$year %in% sy$year, ]
   rank <- function(v, o) mean(v < o) + 0.5 * mean(v == o)
@@ -27,7 +27,7 @@ observedRanks <- function(elf, minHa = 50) {
 #' @param title The page title (browser tab and heading). @param subtitle One line under the title. @param label Name of the simulated series in the figures. @param minHa Escape size.
 #' @param dpi Resolution of the inlined figures (80 keeps a 16-ELF page near 9 MB).
 #' @return `file`, invisibly.
-buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa = 50, dpi = 80) {
+buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa, dpi = 80) {
   ids <- vapply(elfs, `[[`, "", "elf"); names(elfs) <- ids
   summ <- summariseGates(gates); summ$ELF <- as.character(summ$ELF)
   summ$burnRate <- vapply(elfs[summ$ELF], function(e) e$burnRate %||% NA_real_, 0)      # for elfOrder(); an ELF input without one sorts last

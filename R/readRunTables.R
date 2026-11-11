@@ -13,7 +13,7 @@
 #' @param years Simulated years. @param runs Number of runs. @param minHa Smallest fire (ha) counted as an escape.
 #' @return The list [runWave1()] documents.
 runTablesToELF <- function(elf, simSizes, simIgnitions, obsYears, obsSizes, years = sort(unique(simIgnitions$year)),
-                           runs = max(simIgnitions$run), covariate = NULL, fit = list(), minHa = 50) {
+                           runs = max(simIgnitions$run), covariate = NULL, fit = list(), minHa) {
   big <- data.table::as.data.table(simSizes)[ha >= minHa, .(year = as.integer(year), run, ha)]
   sy <- data.table::CJ(year = as.integer(years), run = seq_len(runs))
   ig <- data.table::as.data.table(simIgnitions)[, .(year = as.integer(year), run, ignitions)]
