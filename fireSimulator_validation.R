@@ -59,7 +59,7 @@ defineModule(sim, list(
 scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
 
 .inputObjects <- function(sim) {
-  for (par in c("escapeSizeHa", "fireCauses")) SpaDES.core::paramCheckOtherMods(sim, par, ifSetButDifferent = "error")
+  fireSenseUtils::escapeDefinitionOf(sim)     # stops if another module has another escapeSizeHa or fireCauses
   ## fireSense hindcasts: every ELF that has finished all its years; the observed records are cached in <outputPath>/obs
   if (!suppliedElsewhere("validationELFs", sim) && !is.na(P(sim)$hindcastPath)) {
     hc <- P(sim)$hindcastPath; yrs <- P(sim)$hindcastYears; sets <- P(sim)$hindcastSets; inp <- P(sim)$inputsPath

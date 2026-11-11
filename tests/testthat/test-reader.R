@@ -66,7 +66,7 @@ test_that("the module file hands its input to the runner and nothing else", {
   expect_false(grepl("scheduleEvent", paste(vapply(exprs, function(e) paste(deparse(e), collapse = " "), ""), collapse = " ")))
 })
 
-test_that("observedRecord counts observed area on the burnable core, without a flammableRTM warning, and rebuilds an old cache", {
+test_that("observedRecord counts observed area on the burnable core, without a flammableRTM warning", {
   r <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 10000, ymin = 0, ymax = 10000, crs = "EPSG:3978")
   core <- terra::setValues(r, ifelse(terra::colFromCell(r, seq_len(terra::ncell(r))) == 1, 1, NA))   # burnable cells only
   pts <- terra::vect(cbind(500, 500), crs = "EPSG:3978"); pts$YEAR <- 2000L; pts$CAUSE <- "N"; pts$SIZE_HA <- 10
@@ -74,12 +74,24 @@ test_that("observedRecord counts observed area on the burnable core, without a f
   poly$YEAR <- 2000L; poly$FIRECAUS <- "Natural"                                                   # 200 ha, 100 ha in column 1
   testthat::local_mocked_bindings(load_nfdb_points = function(...) pts, load_nbac_polys = function(...) poly,
                                   .package = "fireregimetools")
-  cacheFile <- file.path(withr::local_tempdir(), "9.9.rds")
-  saveRDS("a cache of the whole-polygon count", cacheFile)
-  expect_no_warning(rec <- observedRecord(core, core, "nfdb", "nbac", years = 2000L, cacheFile = cacheFile))
+  expect_no_warning(rec <- observedRecord(core, core, "nfdb", "nbac", years = 2000L, cachePath = withr::local_tempdir()))
   expect_equal(rec$counts$areaBurnedHaAllCause, 100, tolerance = 0.03)
-  expect_true(file.exists(sub("\\.rds$", "_coreStart_natural-unknown_50ha.rds", cacheFile)))
-  expect_identical(readRDS(cacheFile), "a cache of the whole-polygon count")                       # the old file is left alone
+})
+
+test_that("observedRecord is a reproducible::Cache: read back when nothing changed, rebuilt when the escape code of fireSenseUtils changes", {
+  r <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 10000, ymin = 0, ymax = 10000, crs = "EPSG:3978")
+  core <- terra::setValues(r, ifelse(terra::colFromCell(r, seq_len(terra::ncell(r))) == 1, 1, NA))
+  pts <- terra::vect(cbind(500, 500), crs = "EPSG:3978"); pts$YEAR <- 2000L; pts$CAUSE <- "N"; pts$SIZE_HA <- 10
+  poly <- terra::vect("POLYGON ((0 0, 2000 0, 2000 1000, 0 1000, 0 0))", crs = "EPSG:3978"); poly$YEAR <- 2000L; poly$FIRECAUS <- "Natural"
+  reads <- 0L
+  testthat::local_mocked_bindings(load_nfdb_points = function(...) { reads <<- reads + 1L; pts }, load_nbac_polys = function(...) poly,
+                                  .package = "fireregimetools")
+  cachePath <- withr::local_tempdir()
+  rec <- function(...) suppressMessages(observedRecord(core, core, "nfdb", "nbac", years = 2000L, cachePath = cachePath, ...))
+  first <- rec(); rec(cores = 1L); rec(escapeSizeHa = 600)
+  expect_equal(reads, 2L)                                           # the second call was read back; another escape size is another entry
+  testthat::local_mocked_bindings(escapeFireSetDeps = function() list(function(x) "changed"), .package = "fireSenseUtils")
+  expect_equal(rec()$counts, first$counts); expect_equal(reads, 3L)  # the escape code changed: the record is made again
 })
 
 test_that("readHindcastSim: a set-year with no simulated fires (header-only sizes file) reads as zero area", {
@@ -102,15 +114,14 @@ test_that("observedRecord: the default fireCauses is natural + unknown, as in th
   poly$YEAR <- 2000L; poly$FIRECAUS <- c("Natural", "Undetermined")
   testthat::local_mocked_bindings(load_nfdb_points = function(...) pts, load_nbac_polys = function(...) poly,
                                   .package = "fireregimetools")
-  cacheFile <- file.path(withr::local_tempdir(), "9.9.rds")
-  dflt <- observedRecord(core, core, "nfdb", "nbac", years = 2000L, cacheFile = cacheFile)
+  cachePath <- withr::local_tempdir()
+  dflt <- observedRecord(core, core, "nfdb", "nbac", years = 2000L, cachePath = cachePath)
   expect_equal(dflt$counts$ignitions, 2)
   expect_equal(dflt$counts$areaBurnedHa, 200, tolerance = 0.03)
-  nat <- observedRecord(core, core, "nfdb", "nbac", years = 2000L, cacheFile = cacheFile, fireCauses = "natural")
+  nat <- observedRecord(core, core, "nfdb", "nbac", years = 2000L, cachePath = cachePath, fireCauses = "natural")
   expect_equal(nat$counts$ignitions, 1)
   expect_equal(nat$counts$areaBurnedHa, 100, tolerance = 0.03)
-  expect_true(file.exists(sub("\\.rds$", "_coreStart_natural-unknown_50ha.rds", cacheFile)))
-  expect_true(file.exists(sub("\\.rds$", "_coreStart_natural_50ha.rds", cacheFile)))
+  expect_length(unique(reproducible::showCache(cachePath)$cacheId), 2L)                           # one entry per set of causes
   expect_identical(formals(readFireSenseHindcast)$fireCauses, quote(fireSenseUtils::fireSenseFireCauses))
   expect_identical(formals(observedRecord)$fireCauses, quote(fireSenseUtils::fireSenseFireCauses))
   expect_identical(formals(observedRecord)$escapeSizeHa, quote(fireSenseUtils::fireSenseEscapeSizeHa))
@@ -127,6 +138,19 @@ test_that("hindcastCore finds the core raster with or without the NRV folders", 
     core <- hindcastCore(file.path(root, "hc"), "9.9", file.path(root, "in"))
     expect_equal(as.vector(terra::values(core)), c(1, 1, NA, 1))
   }
+})
+
+test_that("the core and the burnable raster are made from one read of the hindcast burn map", {
+  g <- terra::rast(nrows = 2, ncols = 2, vals = c(1, NA, 1, 1))
+  root <- withr::local_tempdir()
+  dir.create(file.path(root, "hc", "9.9", "1986", "1"), recursive = TRUE)
+  terra::writeRaster(g, file.path(root, "hc", "9.9", "1986", "1", "hindcast_burnMap.tif"))
+  dir.create(file.path(root, "in", "9.9"), recursive = TRUE)
+  terra::writeRaster(terra::rast(nrows = 2, ncols = 2, vals = c(2, 2, 1, 2)), file.path(root, "in", "9.9", "rtml_9.9.tif"))
+  burnMap <- hindcastBurnMap(file.path(root, "hc"), "9.9")
+  core <- hindcastCore(file.path(root, "hc"), "9.9", file.path(root, "in"), burnMap)
+  expect_equal(as.vector(terra::values(core)), c(1, NA, NA, 1))             # the core of the rtml, where the simulation can burn
+  expect_equal(as.vector(terra::values(hindcastFlammable(burnMap))), c(1, NA, 1, 1))
 })
 
 test_that("burnRate is the mean annual observed area over the burnable area, in % per year", {

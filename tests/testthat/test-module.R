@@ -1,8 +1,10 @@
 ## The module run on a toy fireSense hindcast: .inputObjects reads it (readFireSenseHindcast()), init scores it and writes
 ## wave1.rds, wave1_results.csv and validation.html to outputPath, and its figures through Plots(). Toy ELF: see helper-source.R.
 
+toyDefinition <- new.env()                      # the escape definition hindcastObserved() was last called with
+
 ## The hindcast folders, inputs and observed-record cache of toyElf(): set 1 of every scored year, a 10 x 10 core.
-toyHindcastFiles <- function(e, root, escapeSizeHa = toyMinHa, fireCauses = c("natural", "unknown")) {
+toyHindcastFiles <- function(e, root) {
   hc <- file.path(root, "hindcast"); inp <- file.path(root, "inputs", e$elf); obs <- file.path(root, "outputs", "obs")
   dir.create(inp, recursive = TRUE); dir.create(obs, recursive = TRUE)
   g <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 10000, ymin = 0, ymax = 10000, crs = "EPSG:3978", vals = 0)
@@ -23,12 +25,14 @@ toyHindcastFiles <- function(e, root, escapeSizeHa = toyMinHa, fireCauses = c("n
   }
   sp <- data.frame(polygonID = e$elf); sp$params <- list(data.frame(maxAsymptote = e$fit$pc)); sp$objFunVal <- list(e$fit$objective)
   saveRDS(sp, file.path(inp, "fireSenseParams_1986-2024_toy_suffix.rds"))
-  ## the observed record as observedRecord() caches it, where the module looks: <outputPath>/obs
-  saveRDS(list(counts = data.table::data.table(year = rec, ignitions = e$obsYears$ignitions, escapes = e$obsYears$escapes),
-               sizes = data.table::data.table(year = rep(e$obsSizes$year, 2), cause = rep(c("natural", "allCause"), each = nrow(e$obsSizes)),
-                                              ha = rep(e$obsSizes$ha, 2)),
-               escapeSizeHa = escapeSizeHa, fireCauses = fireCauses),
-          file.path(obs, paste0(e$elf, "_coreStart_", paste(sort(fireCauses), collapse = "-"), "_", escapeSizeHa, "ha.rds")))
+  ## the NFDB and NBAC shapefiles are not read: hindcastObserved() answers with the toy record, one year at a time, and notes the definition it was given
+  testthat::local_mocked_bindings(load_nfdb_points = function(...) NULL, load_nbac_polys = function(...) NULL, .package = "fireregimetools", .env = parent.frame())
+  testthat::local_mocked_bindings(hindcastObserved = function(core, pts, pol, year, escapeSizeHa, fireCauses, ...) {
+    toyDefinition$escapeSizeHa <- escapeSizeHa; toyDefinition$fireCauses <- fireCauses
+    os <- e$obsSizes[e$obsSizes$year == year, ]
+    list(counts = data.table::data.table(year = year, ignitions = e$obsYears$ignitions[e$obsYears$year == year], escapes = e$obsYears$escapes[e$obsYears$year == year]),
+         sizes = data.table::data.table(cause = rep(c("natural", "allCause"), each = nrow(os)), ha = rep(os$ha, 2)), polys = NULL)
+  }, .package = "fireSenseUtils", .env = parent.frame())
   hc
 }
 
@@ -69,8 +73,9 @@ test_that("escapeSizeHa, fireCauses and minHa reach the reader: the record of th
   skip_if_not_installed("SpaDES.core")
   root <- withr::local_tempdir()
   e <- toyElf(seed = 3, name = "9.9")
-  hc <- toyHindcastFiles(e, root, escapeSizeHa = 100, fireCauses = "natural")   # only this definition's cache exists: a reader that ignored the parameters would open the shapefiles
+  hc <- toyHindcastFiles(e, root)
   sim <- runToyModule(root, e, hc, escapeSizeHa = 100, fireCauses = "natural")
+  expect_equal(toyDefinition$escapeSizeHa, 100); expect_equal(toyDefinition$fireCauses, "natural")   # the module's parameters reached the record
   x <- sim$validationELFs[[1]]
   expect_equal(x$escapeSizeHa, 100); expect_equal(x$fireCauses, "natural")            # properties of the observed record
   escapesOf <- function(z, ha) vapply(seq_len(nrow(z$simYears)), function(i)

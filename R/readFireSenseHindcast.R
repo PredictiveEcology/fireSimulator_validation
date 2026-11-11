@@ -39,37 +39,38 @@ readHindcastSim <- function(hindcastDir, elf, years, sets = 1:5, minHa) {
   list(simYears = simYears, simSizes = simSizes)
 }
 
+#' The hindcast burn map: NA where the simulation cannot burn, over the whole simulated landscape
+#' @param hindcastDir,elf As above. @return `SpatRaster`, read once for [hindcastCore()] and [hindcastFlammable()].
+hindcastBurnMap <- function(hindcastDir, elf) terra::rast(Sys.glob(file.path(hindcastDir, elf, "*", "*", "hindcast_burnMap.tif"))[1])
+
 #' The ELF core on the hindcast grid (1 where the simulation can burn, NA elsewhere)
+#'
+#' The core is the cells of the ELF's `rtml` raster that [fireSenseUtils::inELFCore()] puts in the core (the rule of the fit and the burn).
 #' @param hindcastDir,elf As above. @param inputsDir Where the ELF inputs are (`<inputsDir>/<ELF>/rtml_<ELF>.tif` on the GPSC, `<inputsDir>/<ELF>/NRV/370/1/rtml_<ELF>.tif` where an NRV run has been made).
+#' @param burnMap [hindcastBurnMap()].
 #' @return `SpatRaster`.
-hindcastCore <- function(hindcastDir, elf, inputsDir = "/mnt/fast/inputs") {
-  f <- Sys.glob(file.path(hindcastDir, elf, "*", "*", "hindcast_burnMap.tif"))[1]
-  g <- terra::rast(f)
+hindcastCore <- function(hindcastDir, elf, inputsDir = "/mnt/fast/inputs", burnMap = hindcastBurnMap(hindcastDir, elf)) {
   rtml <- file.path(inputsDir, elf, c("", "NRV/370/1"), paste0("rtml_", elf, ".tif"))
-  core <- terra::crop(terra::rast(rtml[file.exists(rtml)][1]), g)
-  terra::ifel(core == 2 & !is.na(g), 1, NA)
+  zone <- terra::crop(terra::rast(rtml[file.exists(rtml)][1]), burnMap)
+  terra::setValues(burnMap, ifelse(fireSenseUtils::inELFCore(seq_len(terra::ncell(zone)), zone) & !is.na(terra::values(burnMap)[, 1]), 1, NA))
 }
 
 #' The burnable cells of the hindcast grid, core and buffer (1 where the simulation can burn, NA elsewhere)
 #'
-#' The hindcast burn map is `NA` where the simulation cannot burn, over the whole simulated landscape.
-#' @param hindcastDir,elf As above. @return `SpatRaster`, the `flammableRTM` [observedRecord()] needs.
-hindcastFlammable <- function(hindcastDir, elf) {
-  g <- terra::rast(Sys.glob(file.path(hindcastDir, elf, "*", "*", "hindcast_burnMap.tif"))[1])
-  terra::ifel(is.na(g), NA, 1)
-}
+#' @param burnMap [hindcastBurnMap()]. @return `SpatRaster`, the `flammableRTM` [observedRecord()] needs.
+hindcastFlammable <- function(burnMap) terra::ifel(is.na(burnMap), NA, 1)
 
 #' Observed fire of every year of the record, with the fit's definitions
 #'
 #' [fireSenseUtils::hindcastObserved()] (`coreStart = TRUE`) for each year on NFDB points and NBAC polygons: the fires that
 #' start in the core, each at its whole extent (core and buffer); escapes are the polygons of `fireCauses` of `escapeSizeHa` or more
-#' (whole polygon). Cached in `cacheFile`.
+#' (whole polygon). A [reproducible::Cache()] in `cachePath`: a record made by another set of arguments, or by older escape code of
+#' fireSenseUtils ([fireSenseUtils::escapeFireSetDeps()]), is not read.
 #' @param core [hindcastCore()]. @param flammableRTM The burnable cells of the core AND the buffer ([hindcastFlammable()]); fires are
 #'   started and measured on them.
 #' @param nfdbPath,nbacPath The NFDB point shapefile and the NBAC polygon shapefile.
-#' @param years The record. @param cacheFile An `.rds` to read if present and write otherwise; `_coreStart`, the causes and the escape size
-#'   are added to its name, so records of another start rule, other causes or another escape size are not read.
-#' @param cores Forked workers.
+#' @param years The record. @param cachePath The cache folder (`NULL`: reproducible's default).
+#' @param cores Forked workers (not part of the cache key).
 #' @param fireCauses Cause groups (`fireSenseUtils::fireCauseCodes()`) whose fires are counted (labelled `"natural"` in `sizes`);
 #'   default `fireSenseUtils::fireSenseFireCauses` (`c("natural", "unknown")`), the default of `fireSense_dataPrepFit` and `fireSense_summary`. Use the `fireCauses` the fit
 #'   and the hindcast ran with.
@@ -77,11 +78,13 @@ hindcastFlammable <- function(hindcastDir, elf) {
 #'   the hindcast ran with.
 #' @return `list(counts, sizes, polys, escapeSizeHa, fireCauses)`: counts per year (`escapes` is the number of escape polygons), sizes with
 #'   `cause` and `year`, polygons (wrapped), and the escape definition the record was made with.
-observedRecord <- function(core, flammableRTM, nfdbPath, nbacPath, years = 1986:2024, cacheFile = NULL, cores = 1L,
+observedRecord <- function(core, flammableRTM, nfdbPath, nbacPath, years = 1986:2024, cachePath = NULL, cores = 1L,
                            fireCauses = fireSenseUtils::fireSenseFireCauses, escapeSizeHa = fireSenseUtils::fireSenseEscapeSizeHa) {
-  if (!is.null(cacheFile))
-    cacheFile <- sub("(\\.rds)?$", paste0("_coreStart_", paste(sort(fireCauses), collapse = "-"), "_", escapeSizeHa, "ha\\1"), cacheFile)
-  if (!is.null(cacheFile) && file.exists(cacheFile)) return(readRDS(cacheFile))
+  reproducible::Cache(buildObservedRecord, core, flammableRTM, nfdbPath, nbacPath, years, cores, fireCauses, escapeSizeHa,
+                      omitArgs = "cores", .cacheExtra = fireSenseUtils::escapeFireSetDeps(), cachePath = cachePath)
+}
+
+buildObservedRecord <- function(core, flammableRTM, nfdbPath, nbacPath, years, cores, fireCauses, escapeSizeHa) {
   sa <- terra::as.polygons(terra::ext(core), crs = terra::crs(core))
   pts <- fireregimetools::load_nfdb_points(nfdbPath, sa, years, min_size_ha = 0)
   pol <- fireregimetools::load_nbac_polys(nbacPath, sa, years)
@@ -89,11 +92,9 @@ observedRecord <- function(core, flammableRTM, nfdbPath, nbacPath, years = 1986:
                                                   fireCauses = fireCauses, coreStart = TRUE)
     x$polys <- if (!is.null(x$polys) && NROW(x$polys)) terra::wrap(x$polys) else NULL   # SpatVectors cannot leave a fork unwrapped
     x }, mc.cores = cores)
-  r <- list(counts = data.table::rbindlist(lapply(o, `[[`, "counts")),
-            sizes = data.table::rbindlist(Map(function(x, y) cbind(year = y, x$sizes), o, years)),
-            polys = stats::setNames(lapply(o, `[[`, "polys"), years), escapeSizeHa = escapeSizeHa, fireCauses = fireCauses)
-  if (!is.null(cacheFile)) saveRDS(r, cacheFile)
-  r
+  list(counts = data.table::rbindlist(lapply(o, `[[`, "counts")),
+       sizes = data.table::rbindlist(Map(function(x, y) cbind(year = y, x$sizes), o, years)),
+       polys = stats::setNames(lapply(o, `[[`, "polys"), years), escapeSizeHa = escapeSizeHa, fireCauses = fireCauses)
 }
 
 #' Observed side in the ELF input format
@@ -166,7 +167,7 @@ burnRate <- function(core, obsYears) {
 #' One ELF's hindcast as the input of [runWave1()]
 #'
 #' @param elf ELF name. @param hindcastDir `/mnt/fast/outputs/hindcast<ledgerSuffix>`. @param ledgerFile See [readLedgerRow()].
-#' @param nfdbPath,nbacPath Observation shapefiles. @param obsCacheDir Folder for the [observedRecord()] caches.
+#' @param nfdbPath,nbacPath Observation shapefiles. @param obsCacheDir Cache folder of [observedRecord()].
 #' @param years Scored years (only those with every set finished are used). @param sets Sets. @param inputsDir See [hindcastCore()].
 #' @param cores Forked workers for the observed record. @param fireCauses,escapeSizeHa See [observedRecord()]; use the ones the hindcast ran with.
 #' @param minHa Escape size scored (the simulated and observed `escapes`, `area50` and sizes); default `escapeSizeHa`.
@@ -179,8 +180,9 @@ readFireSenseHindcast <- function(elf, hindcastDir, ledgerFile = NULL, nfdbPath,
   done <- hindcastFinishedYears(hindcastDir, elf, years, sets)
   if (!length(done)) return(NULL)
   sim <- readHindcastSim(hindcastDir, elf, done, sets, minHa)
-  core <- hindcastCore(hindcastDir, elf, inputsDir)
-  rec <- observedRecord(core, hindcastFlammable(hindcastDir, elf), nfdbPath, nbacPath, cacheFile = file.path(obsCacheDir, paste0(elf, ".rds")),
+  burnMap <- hindcastBurnMap(hindcastDir, elf)
+  core <- hindcastCore(hindcastDir, elf, inputsDir, burnMap)
+  rec <- observedRecord(core, hindcastFlammable(burnMap), nfdbPath, nbacPath, cachePath = obsCacheDir,
                         cores = cores, fireCauses = fireCauses, escapeSizeHa = escapeSizeHa)
   obs <- readHindcastObserved(rec, hindcastDir, elf, done, minHa)
   fit <- if (is.null(ledgerFile)) list() else readLedgerRow(ledgerFile, elf)
