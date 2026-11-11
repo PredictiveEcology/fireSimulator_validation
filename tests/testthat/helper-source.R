@@ -2,6 +2,8 @@
 suppressMessages({library(ggplot2); library(patchwork)})
 for (f in list.files(testthat::test_path("..", "..", "R"), pattern = "\\.R$", full.names = TRUE)) source(f)
 
+toyMinHa <- 50                                  # the toy escape size: every toy fire is 50 ha or more
+
 ## A toy ELF in the runWave1() input format. `perfect = TRUE`: every simulated run is the observed year;
 ## otherwise runs are drawn from the whole record (the climatological forecast).
 toyElf <- function(name = "toy", perfect = FALSE, seed = 1, scored = seq(1986L, 2021L, 5L), nRuns = 20L, years = 1986:2024) {
@@ -9,7 +11,7 @@ toyElf <- function(name = "toy", perfect = FALSE, seed = 1, scored = seq(1986L, 
   cov <- rnorm(length(years))
   ign <- rnbinom(length(years), mu = exp(3 + 0.4 * cov), size = 5)
   esc <- rbinom(length(years), ign, plogis(-1.5 + 0.5 * cov))
-  sizes <- lapply(seq_along(years), function(i) 50 * exp(rexp(esc[i], 1 / 1.2)))
+  sizes <- lapply(seq_along(years), function(i) toyMinHa * exp(rexp(esc[i], 1 / 1.2)))
   obsSizes <- data.frame(year = rep(years, esc), ha = unlist(sizes))
   area <- vapply(sizes, sum, 0)
   obsYears <- data.frame(year = years, ignitions = ign, escapes = esc, area50 = area)

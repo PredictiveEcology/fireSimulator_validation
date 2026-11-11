@@ -1,8 +1,6 @@
 ## Skill tests S1-S5. Each takes one ELF input (see runWave1()) and returns per-year tables, never a verdict:
 ## verdicts are pooled over ELFs by runWave1(). Losses are CRPS on log(1 + x) unless stated.
 
-MINHA <- 50                                   # escape size: size and area metrics use fires of this size or more
-
 ## losses of the model and of N0 / N1 / N2 for each scored year, plus the model's calibration
 ## simEns: list (per scored year) of simulated ensembles; obs: observed per year; nulls: named list (N1, N2) of lists of ensembles
 scoreEnsembles <- function(years, simEns, obs, nulls, nShuffle = 50L, lossFun = crpsEnsemble) {
@@ -73,17 +71,17 @@ scoreS3 <- function(elf, K = 100L, nShuffle = 50L) {
 
 #' S4: fire sizes
 #'
-#' (a) Anderson-Darling distance between the pooled simulated and the observed sizes of fires of 50 ha or more, per
+#' (a) Anderson-Darling distance between the pooled simulated and the observed sizes of fires of `minHa` or more, per
 #' scored year; the loss of N1 is the median AD of draws from the sizes pooled over all years (scored year included).
 #' N0 is the model's sizes from other years. (b) CRPS of the largest fire of the year on log(1 + ha), 0 when no fire; N1 is
 #' the ELF's annual maxima over all years. N2 does not apply to sizes.
-#' @param elf ELF input list. @param nNull Draws per year for the AD null. @param adFun The AD statistic.
+#' @param elf ELF input list. @param minHa Smallest fire (ha) scored: the escape size. @param nNull Draws per year for the AD null. @param adFun The AD statistic.
 #' @return `list(ad, largest)`: each `list(scores, cal)`-like; `ad$scores` has `year, null, lossModel, lossNull`.
-scoreS4 <- function(elf, nNull = 199, nShuffle = 50L, adFun = fireSenseUtils:::adStatistic) {
+scoreS4 <- function(elf, minHa, nNull = 199, nShuffle = 50L, adFun = fireSenseUtils:::adStatistic) {
   yrs <- scoredYears(elf)
-  sim <- elf$simSizes[elf$simSizes$ha >= MINHA, ]; hist <- elf$obsSizes[elf$obsSizes$ha >= MINHA, ]
-  a <- scoreSizesVsNull(sim, hist, hist, MINHA, nNull, nulls = "history", leaveOut = FALSE, adFun = adFun)$byYear
-  sh <- shuffledSizesAD(sim, hist, MINHA, adFun)
+  sim <- elf$simSizes[elf$simSizes$ha >= minHa, ]; hist <- elf$obsSizes[elf$obsSizes$ha >= minHa, ]
+  a <- scoreSizesVsNull(sim, hist, hist, minHa, nNull, nulls = "history", leaveOut = FALSE, adFun = adFun)$byYear
+  sh <- shuffledSizesAD(sim, hist, minHa, adFun)
   ad <- rbind(data.frame(year = a$year, null = "N1", lossModel = a$adModel, lossNull = a$adNullMedian),
               data.frame(year = sh$year, null = "N0", lossModel = a$adModel[match(sh$year, a$year)], lossNull = sh$adShuffled))
   ## (b) the largest fire per year, per run

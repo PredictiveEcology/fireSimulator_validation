@@ -21,7 +21,14 @@ defineModule(sim, list(
     defineParameter("nPerm", "integer", 9999L, 1L, NA, "Permutations of the ranking floor."),
     defineParameter("seed", "integer", 1L, NA, NA, "Seed of the bootstrap and permutations."),
     defineParameter("simLabel", "character", "simulated", NA, NA, "Name of the simulated series in the figures."),
-    defineParameter("minHa", "numeric", 50, 0, NA, "Smallest fire (ha) counted in the figures; the readers' escape size."),
+    defineParameter("escapeSizeHa", "numeric", fireSenseUtils::fireSenseEscapeSizeHa, 0, NA,
+                    paste("Smallest whole fire polygon (ha) that is an escape: the escape definition of the fit and the hindcast, recorded as a property of",
+                          "the observed record. Checked against `escapeSizeHa` of the other modules.")),
+    defineParameter("fireCauses", "character", fireSenseUtils::fireSenseFireCauses, NA, NA,
+                    paste("Cause groups (`fireSenseUtils::fireCauseCodes()`) whose fires are counted as observed fire: the fit's and the hindcast's `fireCauses`,",
+                          "recorded as a property of the observed record. Checked against `fireCauses` of the other modules.")),
+    defineParameter("minHa", "numeric", NA_real_, 0, NA,
+                    "Smallest fire (ha) scored and drawn: escapes, area and sizes of the simulated and observed series. NA: `escapeSizeHa`."),
     defineParameter(".plots", "character", "screen", NA, NA, "Where the figures go, as for SpaDES.core::Plots(): 'screen', 'png', both, or NA for none."),
     defineParameter(".plotInitialTime", "numeric", 1, NA, NA, "When the figures are drawn on screen; NA for never."),
     ## the fireSense reader: used only when validationELFs is not supplied
@@ -48,7 +55,11 @@ defineModule(sim, list(
   )
 ))
 
+## the size scored: minHa, or the escape size when it is NA
+scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
+
 .inputObjects <- function(sim) {
+  fireSenseUtils::escapeDefinitionOf(sim)     # stops if another module has another escapeSizeHa or fireCauses
   ## fireSense hindcasts: every ELF that has finished all its years; the observed records are cached in <outputPath>/obs
   if (!suppliedElsewhere("validationELFs", sim) && !is.na(P(sim)$hindcastPath)) {
     hc <- P(sim)$hindcastPath; yrs <- P(sim)$hindcastYears; sets <- P(sim)$hindcastSets; inp <- P(sim)$inputsPath
@@ -60,7 +71,8 @@ defineModule(sim, list(
                             ledgerFile = Sys.glob(file.path(inp, e, paste0("fireSenseParams_*", P(sim)$ledgerSuffix, ".rds")))[1],
                             nfdbPath = tail(Sys.glob(file.path(inp, e, "NFDB_point_*.shp")), 1),
                             nbacPath = tail(Sys.glob(file.path(inp, e, "NBAC_merged_*.shp")), 1),
-                            obsCacheDir = obsDir))
+                            obsCacheDir = obsDir, fireCauses = P(sim)$fireCauses,
+                            escapeSizeHa = P(sim)$escapeSizeHa, minHa = scoredMinHa(P(sim))))
     sim$validationELFs <- Filter(Negate(is.null), elfs)
     message("scoring ", length(sim$validationELFs), " ELFs")
   }
@@ -70,13 +82,13 @@ defineModule(sim, list(
 doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
   switch(eventType,
     init = {
-      sim$validationResults <- runWave1(sim$validationELFs, nBoot = P(sim)$nBoot, nNull = P(sim)$nNull,
+      sim$validationResults <- runWave1(sim$validationELFs, minHa = scoredMinHa(P(sim)), nBoot = P(sim)$nBoot, nNull = P(sim)$nNull,
                                         nPerm = P(sim)$nPerm, seed = P(sim)$seed)
       summ <- summariseGates(sim$validationResults$gates)
-      pl <- stats::setNames(lapply(sim$validationELFs, elfPlots, label = P(sim)$simLabel, minHa = P(sim)$minHa),
+      pl <- stats::setNames(lapply(sim$validationELFs, elfPlots, label = P(sim)$simLabel, minHa = scoredMinHa(P(sim))),
                             vapply(sim$validationELFs, `[[`, "", "elf"))
       for (e in sim$validationELFs)
-        Plots(data = e, fn = plotELFPanel, summary = summ, label = P(sim)$simLabel, minHa = P(sim)$minHa, plots = pl[[e$elf]],
+        Plots(data = e, fn = plotELFPanel, summary = summ, label = P(sim)$simLabel, minHa = scoredMinHa(P(sim)), plots = pl[[e$elf]],
               filename = paste0("panel_", gsub(".", "_", e$elf, fixed = TRUE)), ggsaveArgs = panelSize) # Plots() takes ".3" of "11.3" as an extension
       Plots(data = summ, fn = plotOverview, filename = "overview", ggsaveArgs = overviewSize)
       for (m in names(metrics))
@@ -88,7 +100,7 @@ doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
       buildValidationPage(sim$validationELFs, sim$validationResults$gates, file.path(out, "validation.html"),
                           template = file.path(modulePath(sim), currentModule(sim), "pageTemplate.html"),
                           title = P(sim)$pageTitle, subtitle = P(sim)$pageSubtitle, label = P(sim)$simLabel,
-                          minHa = P(sim)$minHa, dpi = P(sim)$pageDpi)
+                          minHa = scoredMinHa(P(sim)), dpi = P(sim)$pageDpi)
     },
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
                   "' in module '", current(sim)[1, "moduleName", with = FALSE], "'", sep = ""))

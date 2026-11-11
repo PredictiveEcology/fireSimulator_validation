@@ -31,21 +31,21 @@ test_that("S3 uses fires of 50 ha or more only: it reads area50, not total area"
 test_that("S4: perfect sizes beat the pooled-sizes null; sizes far too big are worse than N1; the largest-fire CRPS is 0 for a perfect model", {
   skip_if_not_installed("kSamples")
   p <- toyElf(perfect = TRUE)
-  s <- scoreS4(p, nNull = 49)
+  s <- scoreS4(p, toyMinHa, nNull = 49)
   ad <- s$ad$scores; lg <- s$largest$scores
   expect_gt(skillOf(ad, "N1"), 0.5)
   expect_equal(unique(lg$lossModel), 0)
   expect_gt(skillOf(lg, "N1"), 0.95)
   b <- p; b$simSizes$ha <- b$simSizes$ha * 50
-  expect_lt(skillOf(scoreS4(b, nNull = 49)$ad$scores, "N1"), 0)
+  expect_lt(skillOf(scoreS4(b, toyMinHa, nNull = 49)$ad$scores, "N1"), 0)
 })
 
 test_that("scoreSizesVsNull keeps the scored year in the pool when leaveOut = FALSE", {
   skip_if_not_installed("kSamples")
   hist <- data.frame(year = c(rep(1:3, each = 5)), ha = c(rep(60, 5), rep(100, 5), rep(5e4, 5)))
   sim <- data.frame(year = 3, ha = rep(5e4, 5)); obs <- hist[hist$year == 3, ]
-  a <- scoreSizesVsNull(sim, obs, hist, nNull = 99, nulls = "history", leaveOut = TRUE)$byYear
-  b <- scoreSizesVsNull(sim, obs, hist, nNull = 99, nulls = "history", leaveOut = FALSE)$byYear
+  a <- scoreSizesVsNull(sim, obs, hist, toyMinHa, nNull = 99, nulls = "history", leaveOut = TRUE)$byYear
+  b <- scoreSizesVsNull(sim, obs, hist, toyMinHa, nNull = 99, nulls = "history", leaveOut = FALSE)$byYear
   expect_gt(a$adNullMedian, b$adNullMedian)           # the year's own sizes help the in-sample null
   expect_equal(a$adModel, b$adModel)
 })
@@ -60,7 +60,7 @@ test_that("the runner returns the tidy table, gates, per-ELF tables and the flag
   skip_if_not_installed("kSamples")
   elfs <- list(toyElf("a", perfect = TRUE, seed = 1), toyElf("b", perfect = TRUE, seed = 2), toyElf("c", perfect = FALSE, seed = 3))
   elfs[[3]]$fit$fitAreaHa <- 0                                  # fails G3
-  out <- runWave1(elfs, nBoot = 49, nNull = 29, nPerm = 99)
+  out <- runWave1(elfs, toyMinHa, nBoot = 49, nNull = 29, nPerm = 99)
   expect_named(out, c("results", "gates", "perELF", "flagged"))
   expect_equal(out$flagged, "c")
   expect_equal(nrow(out$gates), 18)
@@ -74,4 +74,14 @@ test_that("the runner returns the tidy table, gates, per-ELF tables and the flag
   expect_true(all(c("cover50", "cover90", "logScore") %in% r$measure))
   expect_true(all(c("rhoModel", "rhoIndex", "rhoDiff") %in% r$measure[r$test == "S5"]))
   expect_named(out$perELF, c("S1", "S2", "S3", "S4ad", "S4largest", "S5", "calibration"))
+})
+
+test_that("S4 scores fires of minHa or more: a larger minHa drops the smaller fires from the scored sizes", {
+  skip_if_not_installed("kSamples")
+  p <- toyElf(perfect = TRUE)
+  cut <- stats::median(p$obsSizes$ha)
+  a <- scoreS4(p, toyMinHa, nNull = 19)$largest$scores; b <- scoreS4(p, cut, nNull = 19)$largest$scores
+  expect_true(all(b$lossModel == 0))                                                    # perfect sizes stay perfect
+  p$simSizes <- rbind(p$simSizes, data.frame(year = p$simYears$year[1], run = 1L, ha = cut / 2))   # a simulated fire under minHa
+  expect_equal(scoreS4(p, cut, nNull = 19)$largest$scores$lossModel, b$lossModel)       # is not scored
 })

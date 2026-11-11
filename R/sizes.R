@@ -23,7 +23,7 @@
 #' @return A list. `byYear`: `data.table(year, nSim, nObs, adModel, null, adNullMedian, pctile, skill)`, one
 #'   row per year and null (NA when the year has no observed or no simulated fire >= `minHa`). `pooled`: the same per
 #'   null for the sum of AD over the years scored. `draws`: the null draws behind `pooled`.
-scoreSizesVsNull <- function(sim, obs, hist, minHa = 50, nNull = 999, seed = 1,
+scoreSizesVsNull <- function(sim, obs, hist, minHa, nNull = 999, seed = 1,
                              nulls = c("lognormal", "history"), leaveOut = TRUE,
                              adFun = fireSenseUtils:::adStatistic) {
   nulls <- match.arg(nulls, several.ok = TRUE)
@@ -65,7 +65,7 @@ scoreSizesVsNull <- function(sim, obs, hist, minHa = 50, nNull = 999, seed = 1,
 #' @param sim,obs As in [scoreSizesVsNull()]. @param minHa,adFun As there.
 #' @return `data.table(year, adShuffled)`: for each scored year with observed and simulated fires, the median AD between
 #'   the observation and the simulated sizes of every other scored year that has simulated fires.
-shuffledSizesAD <- function(sim, obs, minHa = 50, adFun = fireSenseUtils:::adStatistic) {
+shuffledSizesAD <- function(sim, obs, minHa, adFun = fireSenseUtils:::adStatistic) {
   sim <- sim[sim$ha >= minHa, ]; obs <- obs[obs$ha >= minHa, ]
   years <- sort(unique(sim$year))
   data.table::rbindlist(lapply(years, function(y) {

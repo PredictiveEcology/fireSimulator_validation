@@ -4,12 +4,12 @@ test_that("runTablesToELF rebuilds the run-year table from fire sizes and igniti
   e <- toyElf(seed = 2)
   ign <- e$simYears[, c("year", "run", "ignitions")]
   sz <- rbind(e$simSizes, data.frame(year = 1986L, run = 1L, ha = 10))                  # a fire under minHa is dropped
-  r <- runTablesToELF("rt", sz, ign, e$obsYears, e$obsSizes, years = sort(unique(ign$year)), runs = 20L)
+  r <- runTablesToELF("rt", sz, ign, e$obsYears, e$obsSizes, years = sort(unique(ign$year)), runs = 20L, minHa = toyMinHa)
   key <- paste(r$simYears$year, r$simYears$run); ref <- paste(e$simYears$year, e$simYears$run)
   expect_equal(r$simYears[match(ref, key), c("ignitions", "escapes")], e$simYears[, c("ignitions", "escapes")], ignore_attr = TRUE)
   expect_equal(r$simYears$area50[match(ref, key)], e$simYears$area50)
-  expect_true(all(r$simSizes$ha >= 50))
-  z <- runTablesToELF("rt", sz[0, ], ign, e$obsYears, e$obsSizes)
+  expect_true(all(r$simSizes$ha >= toyMinHa))
+  z <- runTablesToELF("rt", sz[0, ], ign, e$obsYears, e$obsSizes, minHa = toyMinHa)
   expect_true(all(z$simYears$escapes == 0 & z$simYears$area50 == 0))
 })
 
@@ -18,18 +18,18 @@ test_that("buildValidationPage writes one file with the rows, the ranks and the 
   e1 <- toyElf(seed = 3, name = "a-x"); e2 <- toyElf(seed = 5, name = "b-y")
   g <- do.call(rbind, lapply(list(e1, e2), function(x) cbind(ELF = x$elf, runGates(x, nBoot = 20))))
   f <- tempfile(fileext = ".html")
-  buildValidationPage(list(e1, e2), g, f, testthat::test_path("..", "..", "pageTemplate.html"), title = "Toy validation", subtitle = "toy run", dpi = 30)
+  buildValidationPage(list(e1, e2), g, f, testthat::test_path("..", "..", "pageTemplate.html"), title = "Toy validation", subtitle = "toy run", minHa = toyMinHa, dpi = 30)
   h <- paste(readLines(f, warn = FALSE), collapse = "\n")
   expect_false(grepl("__[A-Z]+__|/\\*ROWS\\*/\\[\\]|/\\*IMG\\*/\\{\\}", h))
   expect_match(h, "<title>Toy validation</title>", fixed = TRUE); expect_match(h, "<h1>Toy validation</h1>", fixed = TRUE)
   expect_match(h, "toy run", fixed = TRUE); expect_match(h, "data:image/png;base64,", fixed = TRUE)
   expect_match(h, "\"panel_a-x\"", fixed = TRUE); expect_match(h, "\"metric_fireSizes\"", fixed = TRUE)
-  rk <- observedRanks(e1)
+  rk <- observedRanks(e1, toyMinHa)
   expect_true(all(rk >= 0 & rk <= 1)); expect_named(rk, c("area", "top10", "ign", "esc", "ape"))
 })
 
 test_that("observedRanks compares the runs with the observed record of the scored years only", {
-  rk <- observedRanks(toyElf(perfect = TRUE))                        # every run is the observed history: ties, rank 0.5
+  rk <- observedRanks(toyElf(perfect = TRUE), toyMinHa)                        # every run is the observed history: ties, rank 0.5
   expect_equal(unname(rk), rep(0.5, 5))
 })
 
@@ -39,7 +39,7 @@ test_that("the page carries each ELF's burn rate, sorts by it by default and put
   e1$burnRate <- 0.2; e2$burnRate <- 1.5                                         # e3 has none
   g <- do.call(rbind, lapply(list(e1, e2, e3), function(x) cbind(ELF = x$elf, runGates(x, nBoot = 20))))
   f <- tempfile(fileext = ".html")
-  buildValidationPage(list(e1, e2, e3), g, f, testthat::test_path("..", "..", "pageTemplate.html"), dpi = 30)
+  buildValidationPage(list(e1, e2, e3), g, f, testthat::test_path("..", "..", "pageTemplate.html"), minHa = toyMinHa, dpi = 30)
   h <- paste(readLines(f, warn = FALSE), collapse = "\n")
   rows <- jsonlite::fromJSON(sub(";.*", "", sub(".*const ROWS = ", "", h)), simplifyVector = FALSE)
   expect_equal(lapply(rows, `[[`, "burnRate"), list(0.2, 1.5, NULL), ignore_attr = TRUE)

@@ -22,20 +22,20 @@
 #'     fires the fit used) and `totalAreaHa` (observed area).
 #' }
 #'
-#' @param elfs List of ELF inputs. @param nBoot Bootstrap resamples. @param nNull Draws per year of the AD null.
+#' @param elfs List of ELF inputs. @param minHa Smallest fire (ha) scored in the size tests: the escape size the inputs were built with. @param nBoot Bootstrap resamples. @param nNull Draws per year of the AD null.
 #' @param nPerm Permutations for the S5 floor. @param seed Seed.
 #' @param adFun The Anderson-Darling statistic (default fireSenseUtils').
 #' @return A list. `results`: tidy table `(test, null, level, ELF, measure, value, lo, hi, nELF, nUnits, verdict)`, `level`
 #'   being `"pooled"` or `"ELF"`; `gates`: `(ELF, gate, pass, value, detail, lo, hi, runLo, runHi, obsRank, nRuns, share100kha)` (`lo`, `hi`: bootstrap interval of `value` over runs; `runLo`, `runHi`: 2.5% and 97.5% of `value` over single runs; G2, G4, G6; `obsRank`: where the observed ranks among the single runs, `nRuns`: runs; G2, G4); `perELF`: named list (S1, S2, S3,
 #'   S4ad, S4largest, S5) of per-ELF-year tables; `flagged`: ELFs for which G2 or G3 failed, whose skill tests are not meaningful.
-runWave1 <- function(elfs, nBoot = 999, nNull = 199, nPerm = 9999, seed = 1, adFun = fireSenseUtils:::adStatistic) {
+runWave1 <- function(elfs, minHa, nBoot = 999, nNull = 199, nPerm = 9999, seed = 1, adFun = fireSenseUtils:::adStatistic) {
   names(elfs) <- vapply(elfs, `[[`, "", "elf")
   gl <- lapply(elfs, runGates, nBoot = nBoot, seed = seed)
   gates <- do.call(rbind, Map(function(g, nm) cbind(ELF = nm, g), gl, names(gl)))
   rownames(gates) <- NULL
   flagged <- names(gl)[!vapply(gl, attr, TRUE, "meaningful")]
   tag <- function(l) do.call(rbind, Map(function(x, nm) cbind(ELF = nm, x), l, names(l)))
-  s <- lapply(elfs, function(e) list(S1 = scoreS1(e), S2 = scoreS2(e), S3 = scoreS3(e), S4 = scoreS4(e, nNull, adFun = adFun), S5 = scoreS5(e, nPerm)))
+  s <- lapply(elfs, function(e) list(S1 = scoreS1(e), S2 = scoreS2(e), S3 = scoreS3(e), S4 = scoreS4(e, minHa, nNull, adFun = adFun), S5 = scoreS5(e, nPerm)))
   perELF <- list(S1 = tag(lapply(s, function(x) x$S1$scores)), S2 = tag(lapply(s, function(x) x$S2$scores)),
                  S3 = tag(lapply(s, function(x) x$S3$scores)), S4ad = tag(lapply(s, function(x) x$S4$ad$scores)),
                  S4largest = tag(lapply(s, function(x) x$S4$largest$scores)), S5 = tag(lapply(s, `[[`, "S5")))
