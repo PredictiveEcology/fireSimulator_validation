@@ -39,7 +39,8 @@ toyHindcastFiles <- function(e, root) {
 ## Run the module on toyElf()'s hindcast; `...` are further module parameters.
 runToyModule <- function(root, e, hc, ...) {
   mp <- file.path(root, "modules"); dir.create(mp, showWarnings = FALSE)
-  file.symlink(normalizePath(testthat::test_path("..", "..")), file.path(mp, "fireSimulator_validation")) # the checkout's folder name may differ
+  link <- file.path(mp, "fireSimulator_validation")
+  if (!file.exists(link)) file.symlink(normalizePath(testthat::test_path("..", "..")), link) # the checkout's folder name may differ; a second link would be made inside the checkout
   withr::local_options(spades.useRequire = FALSE, spades.moduleCodeChecks = FALSE, .local_envir = parent.frame())
   SpaDES.core::simInitAndSpades(
     times = list(start = 0, end = 1), modules = "fireSimulator_validation",
