@@ -6,7 +6,7 @@ toyDefinition <- new.env()                      # the escape definition hindcast
 ## The hindcast folders, inputs and observed-record cache of toyElf(): set 1 of every scored year, a 10 x 10 core.
 toyHindcastFiles <- function(e, root) {
   hc <- file.path(root, "hindcast"); inp <- file.path(root, "inputs", e$elf); obs <- file.path(root, "outputs", "obs")
-  dir.create(inp, recursive = TRUE); dir.create(obs, recursive = TRUE)
+  dir.create(inp, recursive = TRUE); dir.create(obs, recursive = TRUE, showWarnings = FALSE)   # a run on the unfinished hindcast already made obs
   g <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 10000, ymin = 0, ymax = 10000, crs = "EPSG:3978", vals = 0)
   terra::writeRaster(terra::setValues(g, 2), file.path(inp, paste0("rtml_", e$elf, ".tif")))  # 2: the ELF core
   rec <- e$obsYears$year
@@ -89,4 +89,17 @@ test_that("escapeSizeHa, fireCauses and minHa reach the reader: the record of th
   expect_lt(sum(y$simYears$area50), sum(x$simYears$area50))
   p <- SpaDES.core::params(sim2)$fireSimulator_validation
   expect_equal(p$escapeSizeHa, 100); expect_equal(p$fireCauses, "natural")
+})
+
+test_that("a cached run reads the hindcast files present when it runs: an empty folder gives a clear error, and the same parameters score the hindcast once it is finished", {
+  skip_if_not_installed("SpaDES.core")
+  root <- withr::local_tempdir()
+  e <- toyElf(seed = 3, name = "9.9")
+  hc <- file.path(root, "hindcast"); dir.create(hc)
+  expect_error(runToyModule(root, e, hc, .useCache = TRUE), "no finished hindcasts")   # was: a NULL-names error in runWave1()
+  expect_error(runWave1(list(), minHa = toyMinHa), "no ELFs to score")
+  toyHindcastFiles(e, root)                                              # the hindcast finishes; same parameters, same cachePath
+  sim <- runToyModule(root, e, hc, .useCache = TRUE)                     # was: the .inputObjects of the empty folder, from the cache
+  expect_equal(vapply(sim$validationELFs, `[[`, "", "elf"), "9.9")
+  expect_true(file.exists(file.path(root, "outputs", "wave1.rds")))
 })

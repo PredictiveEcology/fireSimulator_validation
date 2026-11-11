@@ -13,7 +13,7 @@
 scoreRanking <- function(d, ref = NULL, nPerm = 9999, seed = 1) {
   set.seed(seed)
   rho <- suppressWarnings(stats::cor(d$obs, d$simMedian, method = "spearman"))
-  perm <- replicate(nPerm, suppressWarnings(stats::cor(sample(d$obs), d$simMedian, method = "spearman")))
+  perm <- replicate(nPerm, suppressWarnings(stats::cor(d$obs[sample.int(nrow(d))], d$simMedian, method = "spearman")))
   rhoRef <- if (is.null(ref)) NA_real_ else
     suppressWarnings(stats::cor(d$obs, ref$value[match(d$year, ref$year)], method = "spearman", use = "complete.obs"))
   data.table::data.table(nYears = nrow(d), rho = rho, pPerm = (1 + sum(perm >= rho, na.rm = TRUE)) / (nPerm + 1), rhoRef = rhoRef)

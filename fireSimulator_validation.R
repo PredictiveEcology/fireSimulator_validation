@@ -14,6 +14,7 @@ defineModule(sim, list(
   citation = list(),
   documentation = list("README.md"),
   reqdPkgs = list("data.table", "MASS", "withr", "ggplot2", "patchwork", "scales", "jsonlite", "terra",
+                  "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9037)", # 9037: reads `.neverCache`
                   "FOR-CAST/fireregimetools@main (>= 0.1.0.9001)", "PredictiveEcology/fireSenseUtils@development (>= 0.2.3.9158)"),
   parameters = bindrows(
     defineParameter("nBoot", "integer", 999L, 1L, NA, "Bootstrap resamples of ELFs and years for the pooled verdicts."),
@@ -29,6 +30,9 @@ defineModule(sim, list(
                           "recorded as a property of the observed record. Checked against `fireCauses` of the other modules.")),
     defineParameter("minHa", "numeric", NA_real_, 0, NA,
                     "Smallest fire (ha) scored and drawn: escapes, area and sizes of the simulated and observed series. NA: `escapeSizeHa`."),
+    defineParameter(".neverCache", "character", ".inputObjects", NA, NA,
+                    paste("Events that are never cached, whatever `.useCache` says (read by SpaDES.core, 3.2.1.9037 or later):",
+                          "`.inputObjects` reads the hindcast files on disk, which the cache key does not hold, so a cached one returns the ELFs of an earlier, unfinished hindcast.")),
     defineParameter(".plots", "character", "screen", NA, NA, "Where the figures go, as for SpaDES.core::Plots(): 'screen', 'png', both, or NA for none."),
     defineParameter(".plotInitialTime", "numeric", 1, NA, NA, "When the figures are drawn on screen; NA for never."),
     ## the fireSense reader: used only when validationELFs is not supplied
@@ -74,6 +78,9 @@ scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
                             obsCacheDir = obsDir, fireCauses = P(sim)$fireCauses,
                             escapeSizeHa = P(sim)$escapeSizeHa, minHa = scoredMinHa(P(sim))))
     sim$validationELFs <- Filter(Negate(is.null), elfs)
+    if (!length(sim$validationELFs))
+      stop("no finished hindcasts in ", hc, ": no ELF has every one of hindcastYears ", min(yrs), "-", max(yrs), " in hindcastSets ", paste(sets, collapse = ", "),
+           if (length(P(sim)$skipELFs)) paste0(" (skipELFs: ", paste(P(sim)$skipELFs, collapse = ", "), ")"))
     message("scoring ", length(sim$validationELFs), " ELFs")
   }
   return(invisible(sim))
