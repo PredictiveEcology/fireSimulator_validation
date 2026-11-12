@@ -29,6 +29,7 @@
 #'   being `"pooled"` or `"ELF"`; `gates`: `(ELF, gate, pass, value, detail, lo, hi, runLo, runHi, obsRank, nRuns, share100kha)` (`lo`, `hi`: bootstrap interval of `value` over runs; `runLo`, `runHi`: 2.5% and 97.5% of `value` over single runs; G2, G4, G6; `obsRank`: where the observed ranks among the single runs, `nRuns`: runs; G2, G4); `perELF`: named list (S1, S2, S3,
 #'   S4ad, S4largest, S5) of per-ELF-year tables; `flagged`: ELFs for which G2 or G3 failed, whose skill tests are not meaningful.
 runWave1 <- function(elfs, minHa, nBoot = 999, nNull = 199, nPerm = 9999, seed = 1, adFun = fireSenseUtils:::adStatistic) {
+  if (!length(elfs)) stop("runWave1(): no ELFs to score")
   names(elfs) <- vapply(elfs, `[[`, "", "elf")
   gl <- lapply(elfs, runGates, nBoot = nBoot, seed = seed)
   gates <- do.call(rbind, Map(function(g, nm) cbind(ELF = nm, g), gl, names(gl)))

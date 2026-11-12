@@ -82,3 +82,9 @@ test_that("scoreRanking: monotone model has rho 1 and a small permutation p", {
   r <- scoreRanking(d, data.table::data.table(year = 1:8, value = rev(1:8)), nPerm = 999)
   expect_equal(r$rho, 1); expect_lt(r$pPerm, 0.01); expect_equal(r$nYears, 8)
 })
+
+test_that("scoreRanking: one scored year gives a one-row result (sample() of a single number n is 1:n)", {
+  d <- data.table::data.table(year = 2015L, obs = 37, simMedian = 20)
+  r <- scoreRanking(d, nPerm = 99)
+  expect_equal(nrow(r), 1L); expect_equal(r$nYears, 1L); expect_true(is.na(r$rho))
+})
