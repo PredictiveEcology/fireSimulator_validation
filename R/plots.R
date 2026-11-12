@@ -275,7 +275,8 @@ plotMetricPanel <- function(plots, summary, metric = names(metrics), ncol = metr
 #' @param summary Wide table, one row per ELF, as [summariseGates()] returns: `ELF` and, for each of `area`, `top10_median`,
 #'   `ignitions`, `escapeRate`, `areaPerEscape`, the columns `<key>_ratio`, `<key>_runLo`, `<key>_runHi`; and `burnRate` (%/yr, optional: ELFs without one are last).
 #'   To compare several runs (arms) on one figure, bind their summaries with an `arm` column (one row per ELF x arm): each ELF is then a
-#'   row of panels with one line per arm, arms in their order of first appearance, top to bottom; an optional `group` column colours the arms.
+#'   row of panels per arm, arms in their order of first appearance, top to bottom, with one line per ELF (by burn rate) in each; an optional `group`
+#'   column colours the arms.
 #' @param baseSize Base font size of the theme.
 #' @return A ggplot.
 plotOverview <- function(summary, baseSize = 15) {
@@ -284,19 +285,19 @@ plotOverview <- function(summary, baseSize = 15) {
   arms <- !is.null(summary$arm)
   d <- do.call(rbind, lapply(names(gateRatios), function(k) data.frame(
     ELF = factor(as.character(summary$ELF), ord), measure = factor(gateRatios[[k]], gateRatios),
-    arm = if (arms) factor(summary$arm, rev(unique(summary$arm))) else NA, group = if (is.null(summary$group)) "all" else summary$group,
+    arm = if (arms) factor(summary$arm, unique(summary$arm)) else NA, group = if (is.null(summary$group)) "all" else summary$group,
     ratio = clamp(summary[[paste0(k, "_ratio")]]), lo = clamp(summary[[paste0(k, "_runLo")]]), hi = clamp(summary[[paste0(k, "_runHi")]]))))
-  p <- if (arms) ggplot(d, aes(ratio, arm, colour = group)) else ggplot(d, aes(ratio, ELF, colour = group))
+  p <- ggplot(d, aes(ratio, ELF, colour = group))
   p <- p + geom_vline(xintercept = 1, colour = "grey40") +
     geom_pointrange(aes(xmin = lo, xmax = hi), orientation = "y", size = 0.5, linewidth = 0.7, na.rm = TRUE) +
     scale_x_log10(breaks = c(0.01, 0.1, 0.25, 0.5, 1, 2, 4, 10, 100), labels = scales::label_comma()) +
     scale_colour_manual(values = c("#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9"), guide = if (is.null(summary$group)) "none" else "legend") +
     labs(title = "Hindcast against observed, all ELFs", subtitle = "simulated / observed: median run (dot) and 95% range of single runs (whisker); 1 = agreement",
-         x = "ratio (log scale)", y = if (arms) "arm, per ELF (ELFs ordered by burn rate)" else "ELF (ordered by burn rate)", colour = NULL,
+         x = "ratio (log scale)", y = if (arms) "ELF (ordered by burn rate), per arm" else "ELF (ordered by burn rate)", colour = NULL,
          caption = "ratios outside 0.01-100 are drawn at the limit") +
     theme_bw(base_size = baseSize) + theme(plot.title = element_text(size = 22, face = "bold"), strip.text = element_text(size = 13), panel.grid.minor = element_blank(),
                                            legend.position = "top")
-  if (arms) p + facet_grid(factor(ELF, rev(ord)) ~ measure, scales = "free_y", space = "free_y", switch = "y") +
+  if (arms) p + facet_grid(arm ~ measure, scales = "free_y", space = "free_y", switch = "y") +
     theme(strip.placement = "outside", strip.text.y.left = element_text(angle = 0, face = "bold"))
   else p + facet_wrap(~measure, nrow = 1)
 }
