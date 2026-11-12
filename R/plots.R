@@ -283,6 +283,7 @@ plotOverview <- function(summary, baseSize = 15) {
   lim <- c(0.01, 100); clamp <- function(x) pmin(pmax(x, lim[1]), lim[2])
   ord <- unique(elfOrder(summary))
   arms <- !is.null(summary$arm)
+  if (arms) summary <- summary[!is.na(summary$arm), ]
   d <- do.call(rbind, lapply(names(gateRatios), function(k) data.frame(
     ELF = factor(as.character(summary$ELF), ord), measure = factor(gateRatios[[k]], gateRatios),
     arm = if (arms) factor(summary$arm, unique(summary$arm)) else NA, group = if (is.null(summary$group)) "all" else summary$group,
