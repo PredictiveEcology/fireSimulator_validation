@@ -68,6 +68,20 @@ test_that("plotOverview orders ELFs by burn rate and builds without warnings", {
   noWarn(plotOverview(s))
 })
 
+test_that("plotOverview draws one line per arm within each ELF when the summary has an arm column", {
+  m <- function(r) { x <- list(); for (k in names(gateRatios)) x <- c(x, setNames(list(r, r / 2, r * 2, r / 2, r * 2), paste0(k, c("_ratio", "_lo", "_hi", "_runLo", "_runHi")))); x }
+  s <- do.call(rbind, Map(function(id, a, r) data.frame(ELF = id, arm = a, group = substr(a, 1, 1), m(r)),
+                          c("a", "a", "b", "b", "b"), c("x1", "y1", "x1", "y1", "y2"), c(2, 0.5, 1, 1.5, 0.8)))
+  s$burnRate <- c(3, 3, 0.1, 0.1, 0.1)
+  p <- plotOverview(s)
+  expect_s3_class(p, "ggplot"); noWarn(p)
+  expect_equal(nrow(p$data), 5 * length(gateRatios))                       # every ELF x arm x ratio
+  expect_equal(levels(p$data$arm), c("y2", "y1", "x1"))                    # first arm at the top
+  expect_s3_class(p$facet, "FacetGrid")
+  expect_equal(overviewSizeFor(5)$height, overviewSize$height)
+  expect_gt(overviewSizeFor(60)$height, overviewSize$height)
+})
+
 test_that("Plots() with .plots = png writes the panel and the overview to disk", {
   skip_if_not_installed("SpaDES.core")
   e <- toyPlotElf(); g <- cbind(ELF = e$elf, runGates(e, nBoot = 20)); s <- summariseGates(g)
