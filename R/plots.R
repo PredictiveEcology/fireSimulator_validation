@@ -312,21 +312,67 @@ overviewSizeFor <- function(nRows) utils::modifyList(overviewSize, list(height =
 #'
 #' Area (G2) and the median of the 10 largest fires (G4) are the gate `value`; ignitions, escape rate and area per escape are
 #' the three links of G6, read from its `detail`. For each ratio `<key>_ratio`, `_lo`, `_hi` (median-run 95%) and `_runLo`, `_runHi`
-#' (single runs 95%).
+#' (single runs 95%), and `_obsRank`: where the observed ranks among the single runs, 0-1 (0 = every run above it); the `obsRank` of
+#' G2 and G4, and for the G6 links the "observed above X% of N runs" of the `detail`, divided by 100.
 #'
 #' @param gates The `gates` table of [runWave1()].
-#' @return A data.frame with `ELF` and the columns above.
+#' @return A data.frame with `ELF` and the columns above (`<key>_ratio`, `_lo`, `_hi`, `_runLo`, `_runHi`, `_obsRank` for each of `area`, `top10_median`, `ignitions`, `escapeRate`, `areaPerEscape`).
 summariseGates <- function(gates) {
   num <- "(?:NA|NaN|Inf|[0-9.]+(?:e[-+][0-9]+)?)"
   link <- function(detail, k) {
-    m <- regmatches(detail, regexec(paste0(k, " (", num, ") \\(median-run 95%: (", num, ")-(", num, "); single runs 95%: (", num, ")-(", num, ")\\)"), detail, perl = TRUE))[[1]]
-    stats::setNames(as.numeric(m[2:6]), paste0(k, c("_ratio", "_lo", "_hi", "_runLo", "_runHi")))
+    m <- regmatches(detail, regexec(paste0(k, " (", num, ") \\(median-run 95%: (", num, ")-(", num, "); single runs 95%: (", num, ")-(", num, ")\\); observed above (", num, ")% of"), detail, perl = TRUE))[[1]]
+    stats::setNames(as.numeric(m[2:7]) / c(1, 1, 1, 1, 1, 100), paste0(k, c("_ratio", "_lo", "_hi", "_runLo", "_runHi", "_obsRank")))
   }
   do.call(rbind, lapply(split(gates, factor(gates$ELF, unique(gates$ELF))), function(g) {
     gate <- function(id, k) { r <- g[g$gate == id, ]
-      stats::setNames(c(r$value, r$lo, r$hi, r$runLo, r$runHi), paste0(k, c("_ratio", "_lo", "_hi", "_runLo", "_runHi"))) }
+      stats::setNames(c(r$value, r$lo, r$hi, r$runLo, r$runHi, r$obsRank), paste0(k, c("_ratio", "_lo", "_hi", "_runLo", "_runHi", "_obsRank"))) }
     d6 <- g$detail[g$gate == "G6"]
     out <- c(gate("G2", "area"), gate("G4", "top10_median"), link(d6, "ignitions"), link(d6, "escapeRate"), link(d6, "areaPerEscape"))
     cbind(data.frame(ELF = g$ELF[1]), as.data.frame(as.list(out)))
   }))
+}
+
+## Okabe-Ito hues: the first six are those of the fit bases of [plotObservedRanks()] (`by = "arm"`); ELFs use all eight, recycled
+okabeIto <- c("#0072b2", "#e69f00", "#009e73", "#d55e00", "#cc79a7", "#56b4e9", "#f0e442", "#000000")
+
+## the fit an arm name is built on: `ct3d04ri` -> `t3d04` (leading `c`, trailing `i` or `ri` dropped)
+armFitBase <- function(arm) sub("^c", "", sub("(ri|i)$", "", arm))
+
+#' Where the observed ranks among the single runs, per metric: one dot per ELF x arm
+#'
+#' One horizontal strip per metric ([gateRatios] order). x is the `<key>_obsRank` of [summariseGates()], 0-1 shown as 0-100%, with a dashed line at
+#' 0.5; dots with the same value are stacked. Rows with no rank are left out.
+#'
+#' @param summary [summariseGates()] output, one row per ELF (x arm: with an `arm` column, needed for `by = "arm"`).
+#' @param by `"ELF"`: colour by ELF. `"arm"`: colour by the arm's fit base ([armFitBase()]: `ct3d04ri` is `t3d04`); arms ending in `ri` are hollow dots.
+#' @param arms Arms to show (default all).
+#' @param baseSize Base font size of the theme.
+#' @return A ggplot.
+plotObservedRanks <- function(summary, by = c("ELF", "arm"), arms = NULL, baseSize = 15) {
+  by <- match.arg(by)
+  if (!is.null(arms)) summary <- summary[summary$arm %in% arms, , drop = FALSE]
+  if (by == "arm") summary <- summary[!is.na(summary$arm), , drop = FALSE]
+  d <- do.call(rbind, lapply(names(gateRatios), function(k) data.frame(
+    measure = factor(gateRatios[[k]], gateRatios), ELF = as.character(summary$ELF),
+    arm = if (is.null(summary$arm)) NA_character_ else as.character(summary$arm), rank = summary[[paste0(k, "_obsRank")]])))
+  d <- d[is.finite(d$rank), , drop = FALSE]
+  d$stack <- stats::ave(seq_len(nrow(d)), d$measure, round(d$rank, 6), FUN = seq_along)
+  if (by == "arm") {
+    d$colour <- armFitBase(d$arm); d$style <- ifelse(grepl("ri$", d$arm), "hollow", "filled")
+  } else d$colour <- d$ELF
+  d$colour <- factor(d$colour, unique(d$colour))
+  p <- ggplot(d, aes(rank, stack, colour = colour)) +
+    geom_vline(xintercept = 0.5, linetype = "dashed", colour = "grey40") +
+    scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25), labels = scales::label_percent(accuracy = 1)) +
+    scale_y_continuous(expand = expansion(add = 0.7)) +
+    scale_colour_manual(values = rep_len(okabeIto, nlevels(d$colour)), drop = FALSE) +
+    facet_grid(measure ~ ., switch = "y") +
+    labs(title = "Where the observed ranks among the simulated runs", colour = if (by == "arm") "fit" else "ELF",
+         subtitle = "0% = every run above the observed, 100% = every run below; dashed = 50%", x = "observed rank among single runs", y = NULL) +
+    theme_bw(base_size = baseSize) + theme(plot.title = element_text(size = 22, face = "bold"), panel.grid.minor = element_blank(),
+                                           panel.grid.major.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+                                           strip.placement = "outside", strip.text.y.left = element_text(angle = 0, face = "bold"), legend.position = "top")
+  if (by == "arm") p + geom_point(aes(shape = style), fill = "white", size = 4, stroke = 1.2) +
+    scale_shape_manual(values = c(filled = 16, hollow = 21), guide = "none")
+  else p + geom_point(size = 4)
 }

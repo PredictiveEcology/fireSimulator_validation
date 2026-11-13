@@ -1,5 +1,8 @@
 ## A simulator-neutral reader: per-run tables in, the ELF input list of runWave1() out.
 
+## data.table syntax below: tell data.table this code is aware of it when the module is a package without a data.table import (test_local())
+.datatable.aware <- TRUE
+
 #' One ELF's input from plain per-run tables
 #'
 #' For a simulator that does not write FireSense hindcast folders (a fast hindcast, another model): the sizes of the fires
