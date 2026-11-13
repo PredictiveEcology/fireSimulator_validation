@@ -1,5 +1,7 @@
 # fireSimulator_validation (development version)
 
+* `buildValidationPage()` reads the observed ranks from the gates (`<key>_obsRank` of `summariseGates()`) instead of recomputing them; `observedRanks()` is removed (checked on three finished scores: the same values). `plotOverview()` and the series colours take their hues from one Okabe-Ito vector.
+
 * `runTablesToELF()` failed with "could not find function \".\"" under `testthat::test_local()` (the module as a package does not import data.table, so data.table treated the call as data.frame code). `.datatable.aware <- TRUE` in `R/readRunTables.R`.
 
 * `summariseGates()` also returns `<key>_obsRank` for each of its five metrics (where the observed ranks among the single runs, 0-1): the `obsRank` of G2 and G4, and for the G6 links the "observed above X% of N runs" of the detail, divided by 100. New `rankArms(scores, summary)` ranks arms by the median, over the ELFs every arm has scored, of the area skill against N1 (with pooled skill, worst area ratio and largest 10-largest ratio). New `plotObservedRanks()` draws the observed ranks, one strip per metric and one dot per ELF x arm, coloured by ELF or by the arm's fit base (`ri` arms hollow). `plotOverview()` takes an `arm` column (one row of panels per arm).

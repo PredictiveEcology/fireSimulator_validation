@@ -13,10 +13,13 @@ overviewSize <- list(width = 16, height = 9, dpi = 110, units = "in", bg = "whit
 gateRatios <- c(area = "area", top10_median = "median of 10 largest fires", ignitions = "ignitions",
                 escapeRate = "escape rate", areaPerEscape = "area per escape")
 
+## Okabe-Ito hues: the first six are those of the fit bases of [plotObservedRanks()] (`by = "arm"`); more levels recycle them
+okabeIto <- c("#0072b2", "#e69f00", "#009e73", "#d55e00", "#cc79a7", "#56b4e9", "#f0e442", "#000000")
+
 ## colours and line types of the observed and the simulated series; `label` names the simulated one
 seriesStyle <- function(label) {
   lv <- c("observed", label)
-  list(levels = lv, cols = stats::setNames(c("black", "#0072B2"), lv), lts = stats::setNames(c("solid", "dashed"), lv))
+  list(levels = lv, cols = stats::setNames(c("black", okabeIto[1]), lv), lts = stats::setNames(c("solid", "dashed"), lv))
 }
 
 ## The tables every figure draws on. `grid`: one row per simulated run-year. Areas and sizes are of fires of `minHa` or more.
@@ -292,7 +295,7 @@ plotOverview <- function(summary, baseSize = 15) {
   p <- p + geom_vline(xintercept = 1, colour = "grey40") +
     geom_pointrange(aes(xmin = lo, xmax = hi), orientation = "y", size = 0.5, linewidth = 0.7, na.rm = TRUE) +
     scale_x_log10(breaks = c(0.01, 0.1, 0.25, 0.5, 1, 2, 4, 10, 100), labels = scales::label_comma()) +
-    scale_colour_manual(values = c("#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9"), guide = if (is.null(summary$group)) "none" else "legend") +
+    scale_colour_manual(values = rep_len(okabeIto, length(unique(d$group))), guide = if (is.null(summary$group)) "none" else "legend") +
     labs(title = "Hindcast against observed, all ELFs", subtitle = "simulated / observed: median run (dot) and 95% range of single runs (whisker); 1 = agreement",
          x = "ratio (log scale)", y = if (arms) "ELF (ordered by burn rate), per arm" else "ELF (ordered by burn rate)", colour = NULL,
          caption = "ratios outside 0.01-100 are drawn at the limit") +
@@ -332,11 +335,8 @@ summariseGates <- function(gates) {
   }))
 }
 
-## Okabe-Ito hues: the first six are those of the fit bases of [plotObservedRanks()] (`by = "arm"`); ELFs use all eight, recycled
-okabeIto <- c("#0072b2", "#e69f00", "#009e73", "#d55e00", "#cc79a7", "#56b4e9", "#f0e442", "#000000")
-
-## the fit an arm name is built on: `ct3d04ri` -> `t3d04` (leading `c`, trailing `i` or `ri` dropped)
-armFitBase <- function(arm) sub("^c", "", sub("(ri|i)$", "", arm))
+## the fit an arm name is built on, and whether it ends in `ri`: `ct3d04ri` -> `t3d04`, TRUE (leading `c`, trailing `i` or `ri` dropped)
+armFit <- function(arm) data.frame(base = sub("^c", "", sub("(ri|i)$", "", arm)), hollow = grepl("ri$", arm))
 
 #' Where the observed ranks among the single runs, per metric: one dot per ELF x arm
 #'
@@ -344,7 +344,7 @@ armFitBase <- function(arm) sub("^c", "", sub("(ri|i)$", "", arm))
 #' 0.5; dots with the same value are stacked. Rows with no rank are left out.
 #'
 #' @param summary [summariseGates()] output, one row per ELF (x arm: with an `arm` column, needed for `by = "arm"`).
-#' @param by `"ELF"`: colour by ELF. `"arm"`: colour by the arm's fit base ([armFitBase()]: `ct3d04ri` is `t3d04`); arms ending in `ri` are hollow dots.
+#' @param by `"ELF"`: colour by ELF. `"arm"`: colour by the arm's fit base ([armFit()]: `ct3d04ri` is `t3d04`); arms ending in `ri` are hollow dots.
 #' @param arms Arms to show (default all).
 #' @param baseSize Base font size of the theme.
 #' @return A ggplot.
@@ -358,7 +358,7 @@ plotObservedRanks <- function(summary, by = c("ELF", "arm"), arms = NULL, baseSi
   d <- d[is.finite(d$rank), , drop = FALSE]
   d$stack <- stats::ave(seq_len(nrow(d)), d$measure, round(d$rank, 6), FUN = seq_along)
   if (by == "arm") {
-    d$colour <- armFitBase(d$arm); d$style <- ifelse(grepl("ri$", d$arm), "hollow", "filled")
+    f <- armFit(d$arm); d$colour <- f$base; d$style <- ifelse(f$hollow, "hollow", "filled")
   } else d$colour <- d$ELF
   d$colour <- factor(d$colour, unique(d$colour))
   p <- ggplot(d, aes(rank, stack, colour = colour)) +

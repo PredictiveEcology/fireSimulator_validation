@@ -24,13 +24,6 @@ test_that("buildValidationPage writes one file with the rows, the ranks and the 
   expect_match(h, "<title>Toy validation</title>", fixed = TRUE); expect_match(h, "<h1>Toy validation</h1>", fixed = TRUE)
   expect_match(h, "toy run", fixed = TRUE); expect_match(h, "data:image/png;base64,", fixed = TRUE)
   expect_match(h, "\"panel_a-x\"", fixed = TRUE); expect_match(h, "\"metric_fireSizes\"", fixed = TRUE)
-  rk <- observedRanks(e1, toyMinHa)
-  expect_true(all(rk >= 0 & rk <= 1)); expect_named(rk, c("area", "top10", "ign", "esc", "ape"))
-})
-
-test_that("observedRanks compares the runs with the observed record of the scored years only", {
-  rk <- observedRanks(toyElf(perfect = TRUE), toyMinHa)                        # every run is the observed history: ties, rank 0.5
-  expect_equal(unname(rk), rep(0.5, 5))
 })
 
 test_that("the page carries each ELF's burn rate, sorts by it by default and puts an ELF without one last", {
