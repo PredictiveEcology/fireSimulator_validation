@@ -142,7 +142,7 @@ test_that("summariseGates gives each metric's obsRank: G2/G4 obsRank, G6 'observ
 })
 
 toyScores <- function() {
-  row <- function(arm, level, ELF, value, lo = value - 0.1, hi = value + 0.1) data.frame(arm = arm, level = level, ELF = ELF, key = "S1_N1_skill", value = value, lo = lo, hi = hi)
+  row <- function(arm, level, ELF, value, lo = value - 0.1, hi = value + 0.1) data.frame(arm = arm, level = level, ELF = ELF, key = "S3_N1_skill", value = value, lo = lo, hi = hi)
   rbind(row("A", "ELF", "e1", 0.2), row("A", "ELF", "e2", 0.6), row("A", "ELF", "e3", -1), row("A", "pooled", NA, 0.4),
         row("B", "ELF", "e1", 0.5), row("B", "ELF", "e2", 0.3), row("B", "pooled", NA, 0.1),
         row("C", "ELF", "e1", 0.9), row("C", "ELF", "e2", 0.7), row("C", "pooled", NA, 0.8))
@@ -154,6 +154,7 @@ toySummary <- function() {
 
 test_that("rankArms ranks by the median skill over the common ELFs, with worst area by |log|", {
   r <- rankArms(toyScores(), toySummary())
+  expect_identical(rankArms(transform(toyScores(), key = "S1_N1_skill"), toySummary(), key = "S1_N1_skill")$arm, r$arm)
   expect_equal(r$arm, c("C", "A", "B")); expect_equal(r$rank, 1:3)
   expect_equal(r$medianSkill, c(0.8, 0.4, 0.4))      # common ELFs e1, e2 (A's e3 is not scored by B and C)
   expect_equal(r$commonELFs, rep("e1, e2", 3))
@@ -164,7 +165,7 @@ test_that("rankArms ranks by the median skill over the common ELFs, with worst a
 })
 
 test_that("rankArms sorts an arm without skill last", {
-  sc <- rbind(toyScores(), data.frame(arm = "D", level = "pooled", ELF = NA, key = "S1_N1_skill", value = 0.99, lo = 0.9, hi = 1))
+  sc <- rbind(toyScores(), data.frame(arm = "D", level = "pooled", ELF = NA, key = "S3_N1_skill", value = 0.99, lo = 0.9, hi = 1))
   r <- rankArms(sc, toySummary())
   expect_equal(r$arm[4], "D"); expect_true(is.na(r$medianSkill[4])); expect_equal(r$arm[1:3], c("C", "A", "B"))
 })

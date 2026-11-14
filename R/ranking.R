@@ -22,16 +22,17 @@ scoreRanking <- function(d, ref = NULL, nPerm = 9999, seed = 1) {
 #' Rank arms by their area skill against N1
 #'
 #' The arms' `runWave1()` score tables bound together (with an `arm` column) give the ranking: the median, over the ELFs that every
-#' arm has scored, of the area skill against N1 (`S1_N1_skill`; median, not mean). Arms with no skill sort last.
+#' arm has scored, of one skill score (`key`; default `S3_N1_skill`, annual area against the ELF's own history N1; median, not mean). Arms with no skill sort last.
 #'
 #' @param scores The `scores` of several [runWave1()] runs bound with an `arm` column: `arm`, `level` (`"pooled"` or `"ELF"`), `ELF`, `key`, `value`, `lo`, `hi`.
-#'   Common ELFs are those with a finite ELF-level `S1_N1_skill` in every arm that has any.
+#'   Common ELFs are those with a finite ELF-level `key` in every arm that has any.
+#' @param key The skill to rank by: a `key` of `scores`. S1 is ignitions, S2 escapes, S3 annual area ([runWave1()]).
 #' @param summary [summariseGates()] output with an `arm` column, one row per ELF x arm (for the worst area and the largest of the 10 largest fires).
 #' @return One row per arm, best first: `rank`, `arm`, `medianSkill`, `commonELFs` (comma-separated), `skill_<ELF>` for every ELF in `scores`,
 #'   `pooledSkill`, `pooledLo`, `pooledHi`, `worstArea` (the `area_ratio` furthest from 1 on the log scale over the arm's ELFs), `largestTop10`
 #'   (the largest `top10_median_ratio`), `nELF`, `ELFs` (the arm's ELFs in `summary`, comma-separated).
-rankArms <- function(scores, summary) {
-  skill <- scores[scores$key == "S1_N1_skill", , drop = FALSE]
+rankArms <- function(scores, summary, key = "S3_N1_skill") {
+  skill <- scores[scores$key == key, , drop = FALSE]
   arms <- unique(as.character(scores$arm))
   perELF <- skill[skill$level == "ELF", , drop = FALSE]
   elfs <- unique(as.character(perELF$ELF))
