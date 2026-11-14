@@ -1,19 +1,5 @@
 ## One self-contained HTML page of the validation: scores table, observed rank, overview, a figure per metric and per ELF.
 
-## where the observed record ranks among the single runs (mid-rank percentile, 0-1), for the five ratios of the gates
-observedRanks <- function(elf, minHa) {
-  sy <- elf$simYears; ob <- elf$obsYears[elf$obsYears$year %in% sy$year, ]     # the record has every year; the runs only the scored ones
-  os <- elf$obsSizes[elf$obsSizes$ha >= minHa & elf$obsSizes$year %in% sy$year, ]
-  rank <- function(v, o) mean(v < o) + 0.5 * mean(v == o)
-  top10 <- function(x) if (length(x)) stats::median(utils::head(sort(x, TRUE), 10L)) else 0
-  run <- stats::aggregate(cbind(ignitions, escapes, area50) ~ run, sy, sum)
-  sz <- elf$simSizes[elf$simSizes$ha >= minHa, ]
-  t10 <- vapply(run$run, function(r) top10(sz$ha[sz$run == r]), 0)
-  c(area = rank(run$area50, sum(ob$area50)), top10 = rank(t10, top10(os$ha)), ign = rank(run$ignitions, sum(ob$ignitions)),
-    esc = rank(run$escapes / run$ignitions, sum(ob$escapes) / sum(ob$ignitions)),
-    ape = rank(run$area50 / pmax(run$escapes, 1), sum(ob$area50) / sum(ob$escapes)))
-}
-
 #' The validation page
 #'
 #' Draws the figures of [plotELFPanel()], [plotOverview()] and [plotMetricPanel()] and writes one HTML file with the images
@@ -43,9 +29,9 @@ buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast v
   key <- c(area = "area", top10 = "top10_median", ign = "ignitions", esc = "escapeRate", ape = "areaPerEscape")
   g <- gates[gates$gate %in% c("G2", "G4", "G6"), ]
   rows <- lapply(ids, function(id) {
-    z <- summ[summ$ELF == id, ]; gi <- g[g$ELF == id, ]; rk <- observedRanks(elfs[[id]], minHa)
+    z <- summ[summ$ELF == id, ]; gi <- g[g$ELF == id, ]
     r <- list(elf = id, burnRate = z$burnRate, gates = sum(gi$pass %in% TRUE), failed = paste(gi$gate[gi$pass %in% FALSE], collapse = " "))
-    for (k in names(key)) r[[k]] <- round(c(z[[paste0(key[k], "_ratio")]], z[[paste0(key[k], "_runLo")]], z[[paste0(key[k], "_runHi")]], rk[[k]]), 3)
+    for (k in names(key)) r[[k]] <- round(c(z[[paste0(key[k], "_ratio")]], z[[paste0(key[k], "_runLo")]], z[[paste0(key[k], "_runHi")]], z[[paste0(key[k], "_obsRank")]]), 3)
     r })
   tpl <- paste(readLines(template, warn = FALSE), collapse = "\n")
   fill <- function(pat, val) tpl <<- sub(pat, val, tpl, fixed = TRUE)
