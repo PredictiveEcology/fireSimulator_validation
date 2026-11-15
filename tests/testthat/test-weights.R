@@ -83,3 +83,55 @@ test_that("module parameter mode = 'weights' reads the files and writes the tabl
   expect_equal(read.csv(file.path(out, "weights_report.csv"))$member, 8L)
   expect_false(file.exists(file.path(out, "wave1.rds")))
 })
+
+## a terms file as fireSense_spreadFit writes it: member, rep, parameters, terms; no ELF column; the ELF is in the run name
+mkTermsFile <- function(dir, elf, d, runName = paste0("fit_suffix_", elf, "_NA_NA_1")) {
+  x <- d$terms[d$terms$ELF == elf, ]
+  x <- do.call(rbind, lapply(1:2, function(r) data.frame(member = x$member, rep = r, youngAge = 0.1, A = x$A + c(0, 100)[r], B = x$B)))   # rep 2 of A is far off
+  f <- file.path(dir, paste0("spreadFitTerms_", runName, ".csv")); write.csv(x, f, row.names = FALSE); f
+}
+
+test_that("terms files of several ELFs: the ELF comes from the run name, or from the names of the files", {
+  d <- mkWeightsToy(c("5.2", "11.3")); root <- withr::local_tempdir()
+  fs <- c(mkTermsFile(root, "5.2", d), mkTermsFile(root, "11.3", d))
+  t <- readTermsFiles(fs)
+  expect_setequal(unique(t$ELF), c("5.2", "11.3")); expect_true(all(c("member", "rep", "youngAge") %in% names(t)))
+  expect_equal(unique(readTermsFiles(stats::setNames(fs[1], "x"))$ELF), "x")
+  bad <- file.path(root, "spreadFitTerms_nothing.csv"); file.copy(fs[1], bad)
+  expect_error(readTermsFiles(bad), "cannot tell the ELF")
+})
+
+test_that("replicates are reduced to their median before selection (the minimum over replicates would pick a lucky one)", {
+  d <- mkWeightsToy(c("5.2", "11.3")); root <- withr::local_tempdir()
+  t <- readTermsFiles(c(mkTermsFile(root, "5.2", d), mkTermsFile(root, "11.3", d)))
+  g <- data.frame(A = 1, B = 0)
+  # median of A over the 2 reps is k + 50, still increasing in k: member 1; by the single lucky rep 1 also 1 - so make rep 1 lucky for member 10
+  t$A[t$rep == 1 & t$member == 10] <- -5
+  out <- tuneWeights(t, d$bySet[d$bySet$ELF %in% c("5.2", "11.3"), ], g, tuneELFs = "5.2", reportELFs = "11.3")
+  expect_equal(out$report$member, 1L)                                   # median of (-5, 110) = 52.5 > 51
+  expect_equal(nrow(out$report), 1L)
+})
+
+test_that("a terms member with no bySet row stops, naming the count", {
+  d <- mkWeightsToy(); d$bySet <- d$bySet[d$bySet$paramSet <= 8, ]
+  expect_error(tuneWeights(d$terms, d$bySet, grid3, tuneELFs = c("a", "b"), reportELFs = "c"), "2 of 10 terms members have no bySet row")
+})
+
+test_that("NA terms stop; a NA loss is left out of the median with a warning naming ELF and weightId; all-NA stops", {
+  d <- mkWeightsToy()
+  t <- d$terms; t$A[2] <- NA
+  expect_error(tuneWeights(t, d$bySet, grid3, tuneELFs = c("a", "b"), reportELFs = "c"), "NA or not finite: ELF a, member 2")
+  t <- d$terms; t$B[3] <- Inf
+  expect_error(tuneWeights(t, d$bySet, grid3, tuneELFs = c("a", "b"), reportELFs = "c"), "not finite")
+  b <- d$bySet; b$area_ratio[b$ELF == "a" & b$paramSet == 8] <- NA          # weight (0, 1) picks member 8 on ELF a
+  expect_warning(out <- tuneWeights(d$terms, b, grid3, tuneELFs = c("a", "b"), reportELFs = "c"), "ELF a, weightId 2")
+  expect_equal(out$losses$weightId[out$losses$selected], 2L)               # ELF b still scores it perfectly
+  b$area_ratio <- NA_real_
+  expect_error(suppressWarnings(tuneWeights(d$terms, b, grid3, tuneELFs = c("a", "b"), reportELFs = "c")), "no finite loss")
+})
+
+test_that("ties go to the lowest member whatever the file order", {
+  d <- mkWeightsToy(); g <- data.frame(A = 0, B = 0)
+  out <- tuneWeights(d$terms[nrow(d$terms):1, ], d$bySet, g, tuneELFs = c("a", "b"), reportELFs = "c")
+  expect_equal(out$report$member, 1L)
+})
