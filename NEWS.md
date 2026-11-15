@@ -1,5 +1,9 @@
 # fireSimulator_validation (development version)
 
+* New parameter `bySet` (default `FALSE`): scores each parameter set of each ELF on its own and writes `wave1_bySet.csv`, one row per set x ELF: the gate ratios (area, median of the 10 largest fires, ignitions, escape rate, area per escape) with single-run 2.5-97.5% ranges, the annual-area skill against N1 and N2, and the G2/G4/G6 results (`scoreBySet()`, which calls `runGates()`, `summariseGates()`, `scoreS3()`). `readHindcastSim()` now reads the `paramSet` column of `hindcast_reps.csv` and `hindcast_sizes.csv` when present (a run is `paramSet * 1000 + rep`) and returns it as `paramSet`; without the column it is the set folder, as before.
+
+* `readHindcastCovariate()` finds the climate file in `<hindcastDir>/<ELF>/climate/` (one shared folder per ELF) first, then in a year folder, as before.
+
 * `buildValidationPage()` reads the observed ranks from the gates (`<key>_obsRank` of `summariseGates()`) instead of recomputing them; `observedRanks()` is removed (checked on three finished scores: the same values). `plotOverview()` and the series colours take their hues from one Okabe-Ito vector.
 
 * `runTablesToELF()` failed with "could not find function \".\"" under `testthat::test_local()` (the module as a package does not import data.table, so data.table treated the call as data.frame code). `.datatable.aware <- TRUE` in `R/readRunTables.R`.

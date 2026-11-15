@@ -40,6 +40,9 @@ defineModule(sim, list(
                     "FireSense hindcast outputs, <hindcastPath>/<ELF>/<year>/<set>/. When set and validationELFs is not supplied, every ELF there that has finished all hindcastYears is read with readFireSenseHindcast()."),
     defineParameter("hindcastYears", "integer", 1986:2024, NA, NA, "Scored years; an ELF is scored only when every one is finished."),
     defineParameter("hindcastSets", "integer", 1L, NA, NA, "Hindcast parameter sets (<set> folders) read."),
+    defineParameter("bySet", "logical", FALSE, NA, NA,
+                    paste("Also score each parameter set of each ELF on its own (the `paramSet` column of hindcast_reps.csv and hindcast_sizes.csv, else the set folder):",
+                          "gate ratios with single-run 2.5-97.5% ranges, annual-area skill and gate results, one row per set, written to wave1_bySet.csv.")),
     defineParameter("skipELFs", "character", character(0), NA, NA, "ELFs of hindcastPath left out."),
     defineParameter("inputsPath", "character", NA_character_, NA, NA,
                     "Folder of the ELF input folders: <inputsPath>/<ELF>/ has rtml_<ELF>.tif, the spread-fit ledger fireSenseParams_*<ledgerSuffix>.rds and the NFDB_point_*.shp and NBAC_merged_*.shp observations (the latest of each)."),
@@ -104,6 +107,9 @@ doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
       out <- outputPath(sim); dir.create(out, recursive = TRUE, showWarnings = FALSE)
       saveRDS(sim$validationResults, file.path(out, "wave1.rds"))
       utils::write.csv(sim$validationResults$results, file.path(out, "wave1_results.csv"), row.names = FALSE)
+      if (P(sim)$bySet)
+        utils::write.csv(do.call(rbind, lapply(sim$validationELFs, scoreBySet, nBoot = P(sim)$nBoot, seed = P(sim)$seed)),
+                         file.path(out, "wave1_bySet.csv"), row.names = FALSE)
       buildValidationPage(sim$validationELFs, sim$validationResults$gates, file.path(out, "validation.html"),
                           template = file.path(modulePath(sim), currentModule(sim), "pageTemplate.html"),
                           title = P(sim)$pageTitle, subtitle = P(sim)$pageSubtitle, label = P(sim)$simLabel,
