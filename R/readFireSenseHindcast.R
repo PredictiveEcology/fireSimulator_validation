@@ -16,7 +16,8 @@ hindcastFinishedYears <- function(hindcastDir, elf, years = seq(1986L, 2021L, 5L
 
 #' Simulated side: one row per run-year, and the simulated fire sizes
 #'
-#' Reads `hindcast_reps.csv` and `hindcast_sizes.csv` of every set. A run is a rep of a set (`run = set * 1000 + rep`).
+#' Reads `hindcast_reps.csv` and `hindcast_sizes.csv` of every set. A run is a rep of a set (`run = set * 1000 + rep`). The set is the
+#' `paramSet` column of the files when they have one (several parameter sets in one folder), else the set folder. `simYears` and `simSizes` carry it as `paramSet`.
 #' `area50` is the area of the run's fires of `minHa` or more. An escape is a fire of `minHa` or more, so `escapes` counts the
 #' fires of `hindcast_sizes.csv` of that size (not the hindcast's `escapes` column, which is the fit's ignition-point definition
 #' and differs from the count of fires by size). A run-year with no such fire has 0 escapes.
@@ -26,9 +27,11 @@ readHindcastSim <- function(hindcastDir, elf, years, sets = 1:5, minHa) {
   both <- lapply(years, function(y) lapply(sets, function(s) {
     d <- file.path(hindcastDir, elf, y, s)
     r <- fread0(file.path(d, "hindcast_reps.csv")); z <- fread0(file.path(d, "hindcast_sizes.csv"))
-    run <- function(x) s * 1000L + x$rep
-    list(reps = data.frame(year = y, run = run(r), ignitions = r$ignitions),
-         sizes = data.frame(year = rep(y, NROW(z)), run = if (NROW(z)) run(z) else integer(0), ha = if (NROW(z)) z$ha else numeric(0)))
+    set <- function(x) if ("paramSet" %in% names(x)) as.integer(x$paramSet) else rep(as.integer(s), NROW(x))
+    run <- function(x) set(x) * 1000L + x$rep
+    list(reps = data.frame(year = y, run = run(r), paramSet = set(r), ignitions = r$ignitions),
+         sizes = data.frame(year = rep(y, NROW(z)), run = if (NROW(z)) run(z) else integer(0), paramSet = if (NROW(z)) set(z) else integer(0),
+                            ha = if (NROW(z)) z$ha else numeric(0)))
   }))
   flat <- unlist(both, recursive = FALSE)
   simYears <- do.call(rbind, lapply(flat, `[[`, "reps")); simSizes <- do.call(rbind, lapply(flat, `[[`, "sizes"))
@@ -128,11 +131,14 @@ readHindcastObserved <- function(rec, hindcastDir, elf, scored, minHa) {
 
 #' ELF median of the fit's climate covariate (CMD) for every year of the record
 #'
-#' Reads `climate/CMD_historical_<ELF>.tif` (one layer per year) from the first set that has it and averages it over the core.
+#' Reads `climate/CMD_historical_<ELF>.tif` (one layer per year) and takes its median over the core. The file is looked for in
+#' `<hindcastDir>/<ELF>/climate/` (one shared folder per ELF, `canClimateData`'s `outputDir`), then in the `climate` folder of the first
+#' year and set that has it.
 #' @param hindcastDir,elf As above. @param core [hindcastCore()]. @param variable Climate variable of the fit.
 #' @return `data.frame(year, value)`.
 readHindcastCovariate <- function(hindcastDir, elf, core, variable = "CMD") {
-  f <- Sys.glob(file.path(hindcastDir, elf, "*", "*", "climate", paste0(variable, "_historical_", elf, ".tif")))[1]
+  nm <- paste0(variable, "_historical_", elf, ".tif")
+  f <- c(Sys.glob(file.path(hindcastDir, elf, "climate", nm)), Sys.glob(file.path(hindcastDir, elf, "*", "*", "climate", nm)))[1]
   r <- terra::rast(f)
   cr <- terra::crop(r, terra::ext(core))
   m <- if (terra::compareGeom(cr, core, stopOnError = FALSE)) core else terra::resample(core, cr, "near")

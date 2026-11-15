@@ -103,3 +103,14 @@ test_that("a cached run reads the hindcast files present when it runs: an empty 
   expect_equal(vapply(sim$validationELFs, `[[`, "", "elf"), "9.9")
   expect_true(file.exists(file.path(root, "outputs", "wave1.rds")))
 })
+
+test_that("the module writes wave1_bySet.csv only when bySet = TRUE", {
+  skip_if_not_installed("SpaDES.core")
+  e <- toyElf(seed = 3, name = "9.9")
+  root <- withr::local_tempdir(); hc <- toyHindcastFiles(e, root); f <- file.path(root, "outputs", "wave1_bySet.csv")
+  runToyModule(root, e, hc)
+  expect_false(file.exists(f))
+  runToyModule(root, e, hc, bySet = TRUE)
+  b <- utils::read.csv(f)
+  expect_equal(nrow(b), 1L); expect_equal(as.character(b$ELF), "9.9")
+})
