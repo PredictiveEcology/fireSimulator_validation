@@ -82,15 +82,15 @@ tuneWeights <- function(terms, bySet, grid, tuneELFs = NULL, reportELFs = NULL, 
 #' Read the terms files of the ELFs
 #'
 #' `fireSense_spreadFit` writes `spreadFitTerms_<runName>.csv` for one ELF (`member`, `rep`, parameters, terms; no `ELF` column).
-#' `<runName>` is the run's output folder below `outputs/` with `/` as `_`, so it holds the ELF as a token like `5.2`.
+#' `<runName>` is the run's output folder below `outputs/` with `/` as `_`, so it holds the ELF as a token like `5.2` or `6.6.2`.
 #'
 #' @param files Character vector of csv files. Named by ELF: those names are the ELFs. Unnamed: the ELF is the one token of the file name
-#'   (split at `_`) that looks like `<number>.<number>`; none or several stops. A file that has an `ELF` column keeps it.
+#'   (split at `_`) that looks like `<number>.<number>` or more parts (`4.3`, `6.6.2`); none or several stops: name such files by ELF. A file that has an `ELF` column keeps it.
 #' @return `data.frame` of all files, with an `ELF` column.
 readTermsFiles <- function(files) {
   elfOf <- function(f, nm) {
     if (nzchar(nm)) return(nm)
-    tok <- grep("^[0-9]+\\.[0-9]+$", strsplit(tools::file_path_sans_ext(basename(f)), "_", fixed = TRUE)[[1]], value = TRUE)
+    tok <- grep("^[0-9]+(\\.[0-9]+)+$", strsplit(tools::file_path_sans_ext(basename(f)), "_", fixed = TRUE)[[1]], value = TRUE)
     if (length(unique(tok)) != 1L) stop("cannot tell the ELF from the file name ", basename(f), " (", length(unique(tok)), " candidates): name the files by ELF")
     tok
   }

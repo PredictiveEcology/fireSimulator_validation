@@ -135,3 +135,13 @@ test_that("ties go to the lowest member whatever the file order", {
   out <- tuneWeights(d$terms[nrow(d$terms):1, ], d$bySet, g, tuneELFs = c("a", "b"), reportELFs = "c")
   expect_equal(out$report$member, 1L)
 })
+
+test_that("readTermsFiles reads two- and three-part ELFs, also beside a dateless numeric suffix token; ambiguous names need naming", {
+  d <- mkWeightsToy(c("6.6.2", "11.4")); root <- withr::local_tempdir()
+  f1 <- mkTermsFile(root, "6.6.2", d, runName = "fit_crpsCauseAnnLinkP04_20261114_6.6.2_NA_NA_1")
+  f2 <- mkTermsFile(root, "11.4", d, runName = "fit_crpsCauseAnnLinkP04_20261114_11.4_NA_NA_1")
+  expect_equal(unique(readTermsFiles(f1)$ELF), "6.6.2"); expect_equal(unique(readTermsFiles(f2)$ELF), "11.4")
+  two <- file.path(root, "spreadFitTerms_fit_0.5_6.6.2_1.csv"); file.copy(f1, two)          # a suffix token 0.5 as well: ambiguous
+  expect_error(readTermsFiles(two), "cannot tell the ELF")
+  expect_equal(unique(readTermsFiles(c("6.6.2" = two))$ELF), "6.6.2")
+})

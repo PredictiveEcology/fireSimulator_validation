@@ -47,7 +47,7 @@ defineModule(sim, list(
                     paste("'score': score the hindcast (the default). 'weights': tune objective weights from `weightsTerms`, `weightsBySet` and `weightsGrid` (`tuneWeights()`):",
                           "no hindcast is read; the tables `weights_report.csv` (the held-out ELFs' rows: the result), `weights_tuning.csv` (tune ELFs, labelled) and `weights_losses.csv` go to outputPath.")),
     defineParameter("weightsTerms", "character", NA_character_, NA, NA,
-                    paste("Mode 'weights': csv files of raw objective terms, one per ELF as fireSense_spreadFit writes them (`spreadFitTerms_<runName>.csv`: `member`, `rep`, parameters, terms; the ELF is read from the file name, or from the names of this vector),",
+                    paste("Mode 'weights': csv files of raw objective terms, one per ELF as fireSense_spreadFit writes them (`spreadFitTerms_<runName>.csv`: `member`, `rep`, parameters, terms; the ELF is read from the file name (the one token like `4.3` or `6.6.2`; an ambiguous name must be given by naming the file with its ELF in this vector)),",
                           "or one file with an `ELF` column. `member` must be the `paramSet` of the bySet scores; replicates (`rep`) are reduced to their median.")),
     defineParameter("weightsBySet", "character", NA_character_, NA, NA,
                     "Mode 'weights': the bySet scores of the same members (`wave1_bySet.csv`); the report rows come from it. NA: wave1_bySet.csv in outputPath."),
