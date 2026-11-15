@@ -43,6 +43,24 @@ defineModule(sim, list(
     defineParameter("bySet", "logical", FALSE, NA, NA,
                     paste("Also score each parameter set of each ELF on its own (the `paramSet` column of hindcast_reps.csv and hindcast_sizes.csv, else the set folder):",
                           "gate ratios with single-run 2.5-97.5% ranges, annual-area skill and gate results, one row per set, written to wave1_bySet.csv.")),
+    defineParameter("mode", "character", "score", NA, NA,
+                    paste("'score': score the hindcast (the default). 'weights': tune objective weights from `weightsTerms`, `weightsBySet` and `weightsGrid` (`tuneWeights()`):",
+                          "no hindcast is read; the tables `weights_report.csv` (the held-out ELFs' rows: the result), `weights_tuning.csv` (tune ELFs, labelled) and `weights_losses.csv` go to outputPath.")),
+    defineParameter("weightsTerms", "character", NA_character_, NA, NA,
+                    paste("Mode 'weights': csv files of raw objective terms, one per ELF as fireSense_spreadFit writes them (`spreadFitTerms_<runName>.csv`: `member`, `rep`, parameters, terms; the ELF is read from the file name (the one token like `4.3` or `6.6.2`; an ambiguous name must be given by naming the file with its ELF in this vector)),",
+                          "or one file with an `ELF` column. `member` must be the `paramSet` of the bySet scores; replicates (`rep`) are reduced to their median.")),
+    defineParameter("weightsBySet", "character", NA_character_, NA, NA,
+                    "Mode 'weights': the bySet scores of the same members (`wave1_bySet.csv`); the report rows come from it. NA: wave1_bySet.csv in outputPath."),
+    defineParameter("weightsGrid", "character", NA_character_, NA, NA,
+                    "Mode 'weights': csv of weight vectors fixed in advance, at most 50 rows, one column per objective term weighted (term names, not parameters; optional `weightId`)."),
+    defineParameter("weightsTuneELFs", "character", character(0), NA, NA, "Mode 'weights': ELFs the weights are selected on. Empty: every ELF of the terms that is not reported."),
+    defineParameter("weightsReportELFs", "character", character(0), NA, NA,
+                    "Mode 'weights': ELFs the result is reported on, none of them tuned on. Empty is allowed only with `weightsLeaveOneOut` (then the tune ELFs)."),
+    defineParameter("weightsLeaveOneOut", "logical", FALSE, NA, NA, "Mode 'weights': hold out each report ELF in turn; its result uses weights selected on the other tune ELFs."),
+    defineParameter("weightsLoss", "character", "area_ratio", NA, NA,
+                    "Mode 'weights': bySet column the weights are selected on, as the median over the tune ELFs: distance from 1 (log scale) for a `_ratio` column, else maximised."),
+    defineParameter("weightsTuneBySet", "character", NA_character_, NA, NA,
+                    "Mode 'weights': bySet scores of other years to select on (to tune and report on the same ELFs). NA: `weightsBySet`."),
     defineParameter("skipELFs", "character", character(0), NA, NA, "ELFs of hindcastPath left out."),
     defineParameter("inputsPath", "character", NA_character_, NA, NA,
                     "Folder of the ELF input folders: <inputsPath>/<ELF>/ has rtml_<ELF>.tif, the spread-fit ledger fireSenseParams_*<ledgerSuffix>.rds and the NFDB_point_*.shp and NBAC_merged_*.shp observations (the latest of each)."),
@@ -68,7 +86,7 @@ scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
 .inputObjects <- function(sim) {
   fireSenseUtils::escapeDefinitionOf(sim)     # stops if another module has another escapeSizeHa or fireCauses
   ## fireSense hindcasts: every ELF that has finished all its years; the observed records are cached in <outputPath>/obs
-  if (!suppliedElsewhere("validationELFs", sim) && !is.na(P(sim)$hindcastPath)) {
+  if (P(sim)$mode == "score" && !suppliedElsewhere("validationELFs", sim) && !is.na(P(sim)$hindcastPath)) {
     hc <- P(sim)$hindcastPath; yrs <- P(sim)$hindcastYears; sets <- P(sim)$hindcastSets; inp <- P(sim)$inputsPath
     obsDir <- file.path(outputPath(sim), "obs"); dir.create(obsDir, recursive = TRUE, showWarnings = FALSE)
     done <- Filter(function(e) length(hindcastFinishedYears(hc, e, yrs, sets)) == length(yrs),
@@ -91,7 +109,13 @@ scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
 
 doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
   switch(eventType,
-    init = {
+    init = if (P(sim)$mode == "weights") {
+      p <- P(sim); out <- outputPath(sim)
+      orNULL <- function(x) if (length(x)) x
+      runWeights(p$weightsTerms, if (is.na(p$weightsBySet)) file.path(out, "wave1_bySet.csv") else p$weightsBySet, p$weightsGrid, outDir = out,
+                 tuneBySetFile = p$weightsTuneBySet, tuneELFs = orNULL(p$weightsTuneELFs), reportELFs = orNULL(p$weightsReportELFs),
+                 leaveOneOut = p$weightsLeaveOneOut, loss = p$weightsLoss)
+    } else {
       sim$validationResults <- runWave1(sim$validationELFs, minHa = scoredMinHa(P(sim)), nBoot = P(sim)$nBoot, nNull = P(sim)$nNull,
                                         nPerm = P(sim)$nPerm, seed = P(sim)$seed)
       summ <- summariseGates(sim$validationResults$gates)

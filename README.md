@@ -18,4 +18,6 @@ Wave 1 of the hindcast test plan:
   spread-fit ledger and NFDB/NBAC observations into the ELF input list.
 - Figures (`R/plots.R`): `plotAreaByYear()`, `plotAnnualAreaDensity()`, `plotFireSizes()`, `plotIgnitions()`, `plotEscapes()`, one ELF each; `plotELFPanel()` puts them in one figure per ELF and `plotMetricPanel()` lays one metric out for all ELFs; `plotOverview()` shows the five gate ratios of all ELFs. The module draws the panels and the overview after scoring through `SpaDES.core::Plots()`; parameter `.plots` (`"screen"`, `"png"`) decides where.
 
+- Weight tuning (`R/weights.R`, parameter `mode = "weights"`): `tuneWeights()` picks, for each weight vector of a fixed grid and each ELF, the spread-fit member with the lowest weighted objective terms, reports that member's bySet indicators, and selects the vector on tune ELFs; the result table has the held-out ELFs only. Terms table: `ELF`, `member` (= `paramSet`), one column per raw term.
+
 Tests: `testthat::test_dir("tests/testthat")`.
