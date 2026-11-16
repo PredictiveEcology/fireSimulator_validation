@@ -82,3 +82,22 @@ test_that("the page carries a sortable bias table: every cell has data-v, the po
   buildValidationPage(list(e1, e2), g, f, testthat::test_path("..", "..", "pageTemplate.html"), minHa = toyMinHa, dpi = 30)
   expect_match(paste(readLines(f, warn = FALSE), collapse = "\n"), "const BIAS = [];", fixed = TRUE)
 })
+
+test_that("an ELF with no observed fire gives a ratio of 1 (none simulated) or Inf (some simulated), never NaN, for the 10 largest as for the totals", {
+  e <- toyElf(seed = 4, perfect = TRUE); e$obsSizes <- e$obsSizes[integer(0), , drop = FALSE]
+  e$obsYears$area50 <- 0; e$obsYears$escapes <- 0
+  b <- scoreBias(e, nBoot = 20)
+  expect_false(anyNA(b$ratio)); expect_equal(bq(b, "top10")$ratio, Inf); expect_equal(bq(b, "area")$ratio, Inf)
+  e$simSizes <- e$simSizes[integer(0), , drop = FALSE]; e$simYears$area50 <- 0; e$simYears$escapes <- 0
+  b <- scoreBias(e, nBoot = 20)
+  expect_equal(bq(b, "top10")$ratio, 1); expect_equal(bq(b, "area")$ratio, 1); expect_equal(bq(b, "escapes")$ratio, 1)
+})
+
+test_that("pooling reports how many ELFs are in the median and how many were left out for a ratio that is not finite", {
+  ok <- scoreBias(scaleSim(toyElf(seed = 5, perfect = TRUE, name = "a"), 2), nBoot = 20)
+  z <- toyElf(seed = 4, perfect = TRUE, name = "z"); z$obsSizes <- z$obsSizes[integer(0), , drop = FALSE]
+  bad <- scoreBias(z, nBoot = 20)
+  p <- poolBias(rbind(ok, bad)); a <- bq(p, "top10")
+  expect_equal(a$nELF, 2L); expect_equal(a$nNonFinite, 1L); expect_equal(a$ratio, bq(ok, "top10")$ratio)
+  expect_equal(poolBias(ok)$nNonFinite, rep(0L, 4)); expect_equal(unique(poolBias(ok)$nELF), 1L)
+})

@@ -1,5 +1,8 @@
 ## One self-contained HTML page of the validation: scores table, observed rank, overview, a figure per metric and per ELF.
 
+## one ratio cell of the page's tables: the ratio, the low and high of the single runs (or of the ELFs), and the observed rank
+ratioCell <- function(ratio, lo, hi, obsRank) round(c(ratio, lo, hi, obsRank), 3)
+
 #' The validation page
 #'
 #' Draws the figures of [plotELFPanel()], [plotOverview()] and [plotMetricPanel()] and writes one HTML file with the images
@@ -32,7 +35,7 @@ buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast v
   rows <- lapply(ids, function(id) {
     z <- summ[summ$ELF == id, ]; gi <- g[g$ELF == id, ]
     r <- list(elf = id, burnRate = z$burnRate, gates = sum(gi$pass %in% TRUE), failed = paste(gi$gate[gi$pass %in% FALSE], collapse = " "))
-    for (k in names(key)) r[[k]] <- round(c(z[[paste0(key[k], "_ratio")]], z[[paste0(key[k], "_runLo")]], z[[paste0(key[k], "_runHi")]], z[[paste0(key[k], "_obsRank")]]), 3)
+    for (k in names(key)) r[[k]] <- ratioCell(z[[paste0(key[k], "_ratio")]], z[[paste0(key[k], "_runLo")]], z[[paste0(key[k], "_runHi")]], z[[paste0(key[k], "_obsRank")]])
     r })
   biasRows <- biasPageRows(bias)
   tpl <- paste(readLines(template, warn = FALSE), collapse = "\n")

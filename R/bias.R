@@ -9,38 +9,39 @@ biasUnits <- c(area = "ha per 1000 yr", top10 = NA_character_, ignitions = "fire
 #'
 #' For each of area burned (`area50`), the median of the 10 largest fires, ignitions and escapes: the ratio of the median over runs of the run's value
 #' to the observed value, over the scored years. A run's value is its total over the scored years (area, ignitions, escapes) or the
-#' median of its 10 largest fires (as G4, [gateG4()], which this calls). Totals use the statistic of G2 ([totalRatio()]) and the
-#' resampling of [bootRuns()].
+#' median of its 10 largest fires (as G4). Totals use the statistic of G2 ([totalRatio()]) and the 10 largest
+#' that of G4 ([topStat()]), both with the resampling of [bootRuns()]; with nothing observed the ratio is 1 (nothing simulated) or Inf.
 #'
 #' @param elf An ELF input list ([runWave1()]). @param nBoot,seed Bootstrap over runs.
 #' @return `data.frame`, one row per quantity: `level` ("ELF"), `ELF`, `quantity`, `observed`, `simMedian` (the median run's value; the same units as `observed`),
 #'   `ratio`, `log2ratio`, `lo`, `hi` (bootstrap interval of the median-run ratio), `runLo`, `runHi` (2.5% and 97.5% of the single runs' value over
-#'   `observed`), `elfLo`, `elfHi`, `ratioOfSums` (NA here; see [poolBias()]), `obsRank` (share of runs below the observation, 0-1; ties count half),
+#'   `observed`), `elfLo`, `elfHi`, `ratioOfSums` (NA here; see [poolBias()]), `nELF` (1) and `nNonFinite` (1 when the ratio is not finite), `obsRank` (share of runs below the observation, 0-1; ties count half),
 #'   `nRuns`, `nYears`, `per1000yr` (the implied difference, median run minus observed, accumulated over 1000 years: `(ratio - 1) * observed per year * 1000`;
 #'   NA for the largest fires) and `unit` of `per1000yr`.
 scoreBias <- function(elf, nBoot = 1000, seed = 1) {
   years <- unique(elf$simYears$year)
   o <- elf$obsYears[elf$obsYears$year %in% years, , drop = FALSE]
-  g4 <- gateG4(elf$simSizes, elf$obsSizes, nBoot = nBoot, seed = seed)
   row <- function(q, observed, simMedian, b, i = 1L)
     data.frame(level = "ELF", ELF = elf$elf, quantity = q, observed = observed, simMedian = simMedian, ratio = b$est[i], log2ratio = log2(b$est[i]),
-               lo = b$lo[i], hi = b$hi[i], runLo = b$runLo[i], runHi = b$runHi[i], elfLo = NA_real_, elfHi = NA_real_, ratioOfSums = NA_real_,
+               lo = b$lo[i], hi = b$hi[i], runLo = b$runLo[i], runHi = b$runHi[i], elfLo = NA_real_, elfHi = NA_real_, ratioOfSums = NA_real_, nELF = 1L, nNonFinite = as.integer(!is.finite(b$est[i])),
                obsRank = b$obsRank[i], nRuns = b$nRuns, nYears = length(years),
                per1000yr = if (q == "top10") NA_real_ else (simMedian - observed) / length(years) * 1000, unit = unname(biasUnits[q]))
   tot <- function(q, col) {
     b <- bootRuns(elf$simYears[elf$simYears$year %in% years, , drop = FALSE], totalRatio(col, sum(o[[col]])), nBoot, seed)
     row(q, sum(o[[col]]), b$est[2], b)
   }
+  ## the 10 largest: G4's statistic and resampling (G4 compares to the observed fires of the scored years); no observed fire: as the totals
   obsTop <- topFires(elf$obsSizes$ha[elf$obsSizes$year %in% years])
-  top <- row("top10", obsTop, g4$value * obsTop, list(est = g4$value, lo = g4$lo, hi = g4$hi, runLo = g4$runLo, runHi = g4$runHi,
-                                                      obsRank = g4$obsRank, nRuns = g4$nRuns))
+  g4 <- topStat(obsTop)
+  b <- bootRuns(elf$simSizes, function(s) { x <- g4(s); c(ratio = zeroSafeRatio(x[["simTop"]], obsTop), x[2:3]) }, nBoot, seed)
+  top <- row("top10", obsTop, b$est[2], b)
   rbind(tot("area", "area50"), top, tot("ignitions", "ignitions"), tot("escapes", "escapes"))
 }
 
 #' Bias pooled over ELFs
 #'
 #' Two pooled ratios, not the same number. `ratio` is the median over ELFs of the ELF ratios (`elfLo`, `elfHi`: their range, lowest and highest ELF);
-#' it treats every ELF alike. `ratioOfSums` is the sum over ELFs of the median run's total over the sum of the observed totals (NA for the largest
+#' it treats every ELF alike. ELFs with a ratio that is not finite (nothing observed, something simulated: Inf) are left out of the median and range, and counted: `nELF` is the number of ELFs and `nNonFinite` how many of them were left out. `ratioOfSums` is the sum over ELFs of the median run's total over the sum of the observed totals (NA for the largest
 #' fires, which have no total); large ELFs dominate it. `per1000yr` is the sum over ELFs of the ELFs' differences.
 #'
 #' @param bias The rows of [scoreBias()] of several ELFs, bound.
@@ -52,7 +53,7 @@ poolBias <- function(bias) {
     r <- x$ratio[is.finite(x$ratio)]
     data.frame(level = "pooled", ELF = "all", quantity = q, observed = if (tot) sum(x$observed) else NA_real_, simMedian = if (tot) sum(x$simMedian) else NA_real_,
                ratio = med(x$ratio), log2ratio = med(x$log2ratio), lo = NA_real_, hi = NA_real_, runLo = NA_real_, runHi = NA_real_,
-               elfLo = min(r), elfHi = max(r), ratioOfSums = if (tot) sum(x$simMedian) / sum(x$observed) else NA_real_,
+               elfLo = if (length(r)) min(r) else NA_real_, elfHi = if (length(r)) max(r) else NA_real_, nELF = nrow(x), nNonFinite = sum(!is.finite(x$ratio)), ratioOfSums = if (tot) zeroSafeRatio(sum(x$simMedian), sum(x$observed)) else NA_real_,
                obsRank = med(x$obsRank), nRuns = NA_integer_, nYears = sum(x$nYears), per1000yr = if (tot) sum(x$per1000yr) else NA_real_,
                unit = unname(biasUnits[q]))
   }))
@@ -76,7 +77,7 @@ biasResultRows <- function(bias) {
     lo <- ifelse(pooled, bias$elfLo, bias$runLo); hi <- ifelse(pooled, bias$elfHi, bias$runHi)
     if (m == "log2ratio") { lo <- log2(lo); hi <- log2(hi) }
     data.frame(test = "B", null = bias$quantity, level = bias$level, ELF = bias$ELF, measure = m, value = bias[[m]], lo = lo, hi = hi,
-               nELF = ifelse(pooled, length(unique(bias$ELF[!pooled])), 1L), nUnits = ifelse(pooled, bias$nYears, bias$nRuns), verdict = NA_character_)
+               nELF = bias$nELF, nUnits = ifelse(pooled, bias$nYears, bias$nRuns), verdict = NA_character_)
   }))
 }
 
@@ -84,12 +85,12 @@ biasResultRows <- function(bias) {
 ## is `c(ratio, low, high, obsRank)`, low and high the range of single runs (ELF rows) or over ELFs (pooled); `<q>Diff` is the total's per1000yr
 biasPageRows <- function(bias) {
   if (is.null(bias)) return(list())
-  cell <- function(x, pooled) round(c(x$ratio, if (pooled) x$elfLo else x$runLo, if (pooled) x$elfHi else x$runHi, x$obsRank), 3)
+  cell <- function(x, pooled) ratioCell(x$ratio, if (pooled) x$elfLo else x$runLo, if (pooled) x$elfHi else x$runHi, x$obsRank)
   rowOf <- function(label, x, pooled, sums = FALSE) {
     r <- list(elf = label)
     for (q in names(biasQuantities)) {
       z <- x[x$quantity == q, ]
-      r[[q]] <- if (sums) round(c(z$ratioOfSums, NA, NA, NA), 3) else cell(z, pooled)
+      r[[q]] <- if (sums) ratioCell(z$ratioOfSums, NA, NA, NA) else cell(z, pooled)
       if (q != "top10") r[[paste0(q, "Diff")]] <- signif(z$per1000yr, 3)
     }
     r

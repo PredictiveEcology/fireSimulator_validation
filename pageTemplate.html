@@ -174,6 +174,27 @@ const NAMES = { area: "area", top10: "10 largest", ign: "ignitions", esc: "escap
 const slug = e => "elf-" + e.replace(/\./g, "_");
 const f2 = v => v.toFixed(2);
 const num = (a, b, d) => a == null || b == null ? (a == null) - (b == null) : d * (a - b);   // a missing value sorts last, whichever way
+// One ratio cell [ratio, low, high, obsRank] (a missing part is left out); `lead` is the row's id for the tooltip. data-v: the value the column sorts on.
+function ratioCell(c, lead, name) {
+  const [m, lo, hi, rk] = c ?? [], out = m != null && lo != null && (hi < 1 || lo > 1);
+  const rank = rk == null ? "" : `<span class="rk">obs ${Math.round(rk * 100)}%</span>`;
+  const rng = lo == null ? "" : `<span class="r">${f2(lo)}&ndash;${f2(hi)}</span>`;
+  const tip = m == null ? "" : ` title="${lead} ${name}: ${f2(m)}${lo == null ? "" : `, single runs ${f2(lo)} to ${f2(hi)}`}${out ? " (observed outside)" : ""}${rk == null ? "" : `; observed above ${Math.round(rk * 100)}% of runs`}"`;
+  return `<td data-v="${m ?? ""}" class="${out ? "out" : ""}"${tip}><span class="v">${m == null ? "" : f2(m)}</span>${rng}${rank}</td>`;
+}
+// Rows sorted by `val(row)`, direction d; key "elf" sorts by name (numeric-aware); `first(row)` rows stay on top
+const sortRows = (rows, key, d, val, first = () => false) => rows.slice().sort((a, b) => first(a) !== first(b) ? (first(a) ? -1 : 1)
+  : key === "elf" ? d * a.elf.localeCompare(b.elf, "en", { numeric: true }) : num(val(a), val(b), d));
+// Click-to-sort headers (buttons with data-<attr>): `state` = {k, d}, `render` redraws
+function bindSort(attr, state, render) {
+  const sel = `th button[data-${attr}]`;
+  document.querySelectorAll(sel).forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset[attr]; state.d = k === state.k ? -state.d : (k === "elf" ? 1 : -1); state.k = k; render();
+  }));
+  return () => document.querySelectorAll(sel).forEach(b => {
+    if (b.dataset[attr] === state.k) b.setAttribute("aria-sort", state.d > 0 ? "ascending" : "descending"); else b.removeAttribute("aria-sort");
+  });
+}
 const byRate = ROWS.slice().sort((a, b) => num(a.burnRate, b.burnRate, -1));
 let sortK = "burnRate", sortD = -1, metric = METRICS[0][0], elf = byRate.length ? byRate[0].elf : null;
 
@@ -219,52 +240,29 @@ renderRank();
 
 function renderRows() {
   const v = r => sortK === "gates" ? r.gates : sortK === "burnRate" ? r.burnRate : r[sortK][0];
-  const s = ROWS.slice().sort((a, b) => sortK === "elf"
-    ? sortD * a.elf.localeCompare(b.elf, "en", { numeric: true }) : num(v(a), v(b), sortD));
-  document.getElementById("rows").innerHTML = s.map(r => {
-    const cells = COLS.map(k => {
-      const [m, lo, hi, rk] = r[k], out = hi < 1 || lo > 1;
-      const rank = rk == null ? "" : `<span class="rk">obs ${Math.round(rk * 100)}%</span>`;
-      return `<td class="${out ? "out" : ""}" title="${r.elf} ${NAMES[k]}: ${f2(m)}, single runs ${f2(lo)} to ${f2(hi)}${out ? " (observed outside)" : ""}${rk == null ? "" : `; observed above ${Math.round(rk * 100)}% of runs`}">` +
-        `<span class="v">${f2(m)}</span><span class="r">${f2(lo)}&ndash;${f2(hi)}</span>${rank}</td>`;
-    }).join("");
+  document.getElementById("rows").innerHTML = sortRows(ROWS, sortK, sortD, v).map(r => {
+    const cells = COLS.map(k => ratioCell(r[k], r.elf, NAMES[k])).join("");
     const g = `${r.gates}/__NGATES__${r.failed ? `<span class="chip">${r.failed}</span>` : ""}`;
     const br = r.burnRate == null ? "" : r.burnRate.toPrecision(2);
     return `<tr><td><a href="#${slug(r.elf)}">${r.elf}</a></td><td><span class="v">${br}</span></td>${cells}<td>${g}</td></tr>`;
   }).join("");
-  document.querySelectorAll("th button[data-k]").forEach(b => {
-    if (b.dataset.k === sortK) b.setAttribute("aria-sort", sortD > 0 ? "ascending" : "descending");
-    else b.removeAttribute("aria-sort");
-  });
+  markScore();
 }
-document.querySelectorAll("th button[data-k]").forEach(b => b.addEventListener("click", () => {
-  const k = b.dataset.k;
-  sortD = k === sortK ? -sortD : (k === "elf" ? 1 : -1); sortK = k; renderRows();
-}));
+const markScore = bindSort("k", { get k() { return sortK; }, set k(x) { sortK = x; }, get d() { return sortD; }, set d(x) { sortD = x; } }, renderRows);
 
-// Bias table: every cell carries data-v, the value it sorts on
-let biasK = "elf", biasD = 1;
+// Bias table: the same cells (ratioCell), each with data-v
+const biasSort = { k: "elf", d: 1 };
 const BCOLS = ["area", "top10", "ignitions", "escapes"], DCOLS = ["areaDiff", "ignitionsDiff", "escapesDiff"];
 function renderBias() {
-  const v = r => biasK === "elf" ? r.elf : Array.isArray(r[biasK]) ? r[biasK][0] : r[biasK];
-  const s = BIAS.slice().sort((a, b) => /^all/.test(a.elf) !== /^all/.test(b.elf) ? (/^all/.test(a.elf) ? -1 : 1)   // the pooled rows stay on top
-    : biasK === "elf" ? biasD * a.elf.localeCompare(b.elf, "en", { numeric: true }) : num(v(a), v(b), biasD));
-  document.getElementById("biasRows").innerHTML = s.map(r => {
-    const cells = BCOLS.map(k => {
-      const [m, lo, hi, rk] = r[k] ?? [], out = m != null && lo != null && (hi < 1 || lo > 1);
-      const rank = rk == null ? "" : `<span class="rk">obs ${Math.round(rk * 100)}%</span>`;
-      return `<td data-v="${m ?? ""}" class="${out ? "out" : ""}"><span class="v">${m == null ? "" : f2(m)}</span>${lo == null ? "" : `<span class="r">${f2(lo)}&ndash;${f2(hi)}</span>`}${rank}</td>`;
-    }).join("");
+  const v = r => Array.isArray(r[biasSort.k]) ? r[biasSort.k][0] : r[biasSort.k];
+  document.getElementById("biasRows").innerHTML = sortRows(BIAS, biasSort.k, biasSort.d, v, r => /^all/.test(r.elf)).map(r => {   // the pooled rows stay on top
+    const cells = BCOLS.map(k => ratioCell(r[k], r.elf, k)).join("");
     const d = DCOLS.map(k => `<td data-v="${r[k] ?? ""}"><span class="v">${r[k] == null ? "" : r[k].toLocaleString("en", { maximumSignificantDigits: 3 })}</span></td>`).join("");
     return `<tr><td data-v="${r.elf}">${/^all/.test(r.elf) ? r.elf : `<a href="#${slug(r.elf)}">${r.elf}</a>`}</td>${cells}${d}</tr>`;
   }).join("");
-  document.querySelectorAll("th button[data-b]").forEach(b => {
-    if (b.dataset.b === biasK) b.setAttribute("aria-sort", biasD > 0 ? "ascending" : "descending"); else b.removeAttribute("aria-sort");
-  });
+  markBias();
 }
-document.querySelectorAll("th button[data-b]").forEach(b => b.addEventListener("click", () => {
-  const k = b.dataset.b; biasD = k === biasK ? -biasD : (k === "elf" ? 1 : -1); biasK = k; renderBias();
-}));
+const markBias = bindSort("b", biasSort, renderBias);
 if (BIAS.length) renderBias(); else document.getElementById("bias").hidden = true;
 
 function setMetric(m) {

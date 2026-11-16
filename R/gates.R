@@ -80,8 +80,10 @@ perRun <- function(x, value, fun = sum) {
 ## (the observed total); used by G2 (area) and scoreBias() (area, ignitions, escapes)
 totalRatio <- function(col, obs) function(s) {
   sim <- stats::median(perRun(s, col))
-  c(ratio = if (obs > 0) sim / obs else if (sim == 0) 1 else Inf, simHa = sim)
+  c(ratio = zeroSafeRatio(sim, obs), simHa = sim)
 }
+## sim / obs; with nothing observed: 1 when nothing is simulated either, else Inf
+zeroSafeRatio <- function(sim, obs) if (obs > 0) sim / obs else if (sim == 0) 1 else Inf
 
 #' G2: whole-ELF area burned over the scored years within 0.25-4x of the observation
 #'
@@ -108,6 +110,12 @@ gateG3 <- function(fitAreaHa, totalAreaHa) {
           sprintf("fit set %.0f ha of %.0f ha observed", fitAreaHa, totalAreaHa))
 }
 
+## the statistic of G4 (and of scoreBias()): the median over runs of each run's median of its `k` largest fires, over the observed `obsTop`
+topStat <- function(obsTop, k = 10L) function(s) {
+  simTop <- if (nrow(s)) stats::median(perRun(s, "ha", function(x) topFires(x, k))) else 0
+  c(ratio = simTop / obsTop, simTop = simTop, simMax = if (nrow(s)) stats::median(perRun(s, "ha", max)) else 0)
+}
+
 #' G4: the large simulated fires are within 10x of the large observed fires
 #'
 #' Each run's median of its 10 largest fires over the scored years (`topFires()`); the median run is compared with the
@@ -121,10 +129,7 @@ gateG3 <- function(fitAreaHa, totalAreaHa) {
 gateG4 <- function(simSizes, obsSizes, k = 10L, nBoot = 1000, seed = 1) {
   if ("year" %in% names(simSizes) && "year" %in% names(obsSizes)) obsSizes <- obsSizes[obsSizes$year %in% unique(simSizes$year), , drop = FALSE]
   obsTop <- topFires(obsSizes$ha, k)
-  stat <- function(s) {
-    simTop <- if (nrow(s)) stats::median(perRun(s, "ha", function(x) topFires(x, k))) else 0
-    c(ratio = simTop / obsTop, simTop = simTop, simMax = if (nrow(s)) stats::median(perRun(s, "ha", max)) else 0)
-  }
+  stat <- topStat(obsTop, k)
   b <- bootRuns(simSizes, stat, nBoot, seed)
   r <- b$est[1]; simTop <- b$est[2]; simMax <- b$est[3]
   share <- if (sum(simSizes$ha) > 0) sum(simSizes$ha[simSizes$ha > 1e5]) / sum(simSizes$ha) else 0
