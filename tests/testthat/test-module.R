@@ -152,3 +152,16 @@ test_that("where the hindcast is read from and how many cores read it are not in
   p <- SpaDES.core::params(sim)$fireSimulator_validation
   expect_identical(p$nCores, 2L); expect_identical(p$hindcastPath, file.path(root2, "hindcast"))   # a hit keeps the current values
 })
+
+test_that("the module writes the bias rows to wave1_results.csv and the bias table to wave1.rds and validation.html", {
+  skip_if_not_installed("SpaDES.core")
+  root <- withr::local_tempdir()
+  e <- toyElf(seed = 3, name = "9.9")
+  hc <- toyHindcastFiles(e, root)
+  out <- file.path(root, "outputs")
+  sim <- runToyModule(root, e, hc)
+  b <- utils::read.csv(file.path(out, "wave1_results.csv")); b <- b[b$test == "B", ]
+  expect_setequal(b$measure, c("ratio", "log2ratio", "meanRatio")); expect_setequal(b$null, c("area", "top10", "ignitions", "escapes"))
+  expect_equal(readRDS(file.path(out, "wave1.rds"))$bias, sim$validationResults$bias)
+  expect_match(paste(readLines(file.path(out, "validation.html"), warn = FALSE), collapse = "\n"), "all: median of ELFs", fixed = TRUE)
+})

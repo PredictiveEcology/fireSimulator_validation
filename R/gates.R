@@ -76,6 +76,15 @@ perRun <- function(x, value, fun = sum) {
   as.numeric(tapply(x[[value]], x$run, fun))
 }
 
+## the statistic of a total over the scored years: the median over runs of each run's total of `col`, and its ratio to `obs`
+## (the observed total), and the same with the mean over runs; used by G2 (area) and scoreBias() (area, ignitions, escapes)
+totalRatio <- function(col, obs) function(s) {
+  tot <- perRun(s, col); sim <- stats::median(tot); m <- mean(tot)
+  c(ratio = zeroSafeRatio(sim, obs), simHa = sim, meanRatio = zeroSafeRatio(m, obs), simMean = m)   # G2 reads the first two; scoreBias() the mean too
+}
+## sim / obs; with nothing observed: 1 when nothing is simulated either, else Inf
+zeroSafeRatio <- function(sim, obs) if (obs > 0) sim / obs else if (sim == 0) 1 else Inf
+
 #' G2: whole-ELF area burned over the scored years within 0.25-4x of the observation
 #'
 #' Each run's total area over the scored years; the median run is compared with the observed total over the same years.
@@ -86,10 +95,7 @@ perRun <- function(x, value, fun = sum) {
 #' @param nBoot,seed Bootstrap over runs (`bootRuns()`) for `lo` and `hi`.
 gateG2 <- function(simYears, obsYears, years = unique(simYears$year), nBoot = 1000, seed = 1) {
   obs <- sum(obsYears$area50[obsYears$year %in% years])
-  stat <- function(s) {
-    sim <- stats::median(perRun(s, "area50"))
-    c(ratio = if (obs > 0) sim / obs else if (sim == 0) 1 else Inf, simHa = sim)
-  }
+  stat <- totalRatio("area50", obs)
   b <- bootRuns(simYears[simYears$year %in% years, , drop = FALSE], stat, nBoot, seed)
   gateRow("G2", inRatio(b$est[1]), b$est[1], sprintf("ratio %s; median run %.0f ha, observed %.0f ha, over %d years",
           withInterval(b$est[1], b), b$est[2], obs, length(years)), b$lo[1], b$hi[1], b$runLo[1], b$runHi[1], b$obsRank[1], b$nRuns)
@@ -102,6 +108,12 @@ gateG3 <- function(fitAreaHa, totalAreaHa) {
   if (!is.finite(fitAreaHa) || !is.finite(totalAreaHa) || totalAreaHa <= 0) return(gateRow("G3", NA, NA_real_, "areas not available"))
   gateRow("G3", fitAreaHa / totalAreaHa >= 0.5, fitAreaHa / totalAreaHa,
           sprintf("fit set %.0f ha of %.0f ha observed", fitAreaHa, totalAreaHa))
+}
+
+## the statistic of G4 (and of scoreBias()): the median over runs of each run's median of its `k` largest fires, over the observed `obsTop`
+topStat <- function(obsTop, k = 10L) function(s) {
+  simTop <- if (nrow(s)) stats::median(perRun(s, "ha", function(x) topFires(x, k))) else 0
+  c(ratio = simTop / obsTop, simTop = simTop, simMax = if (nrow(s)) stats::median(perRun(s, "ha", max)) else 0)
 }
 
 #' G4: the large simulated fires are within 10x of the large observed fires
@@ -117,10 +129,7 @@ gateG3 <- function(fitAreaHa, totalAreaHa) {
 gateG4 <- function(simSizes, obsSizes, k = 10L, nBoot = 1000, seed = 1) {
   if ("year" %in% names(simSizes) && "year" %in% names(obsSizes)) obsSizes <- obsSizes[obsSizes$year %in% unique(simSizes$year), , drop = FALSE]
   obsTop <- topFires(obsSizes$ha, k)
-  stat <- function(s) {
-    simTop <- if (nrow(s)) stats::median(perRun(s, "ha", function(x) topFires(x, k))) else 0
-    c(ratio = simTop / obsTop, simTop = simTop, simMax = if (nrow(s)) stats::median(perRun(s, "ha", max)) else 0)
-  }
+  stat <- topStat(obsTop, k)
   b <- bootRuns(simSizes, stat, nBoot, seed)
   r <- b$est[1]; simTop <- b$est[2]; simMax <- b$est[3]
   share <- if (sum(simSizes$ha) > 0) sum(simSizes$ha[simSizes$ha > 1e5]) / sum(simSizes$ha) else 0
