@@ -27,7 +27,7 @@
 #' @param adFun The Anderson-Darling statistic (default fireSenseUtils').
 #' @return A list. `results`: tidy table `(test, null, level, ELF, measure, value, lo, hi, nELF, nUnits, verdict)`, `level`
 #'   being `"pooled"` or `"ELF"`; `gates`: `(ELF, gate, pass, value, detail, lo, hi, runLo, runHi, obsRank, nRuns, share100kha)` (`lo`, `hi`: bootstrap interval of `value` over runs; `runLo`, `runHi`: 2.5% and 97.5% of `value` over single runs; G2, G4, G6; `obsRank`: where the observed ranks among the single runs, `nRuns`: runs; G2, G4); `perELF`: named list (S1, S2, S3,
-#'   S4ad, S4largest, S5) of per-ELF-year tables; `flagged`: ELFs for which G2 or G3 failed, whose skill tests are not meaningful.
+#'   S4ad, S4largest, S5) of per-ELF-year tables; `bias`: the median run over the observation for area, the 10 largest fires, ignitions and escapes, per ELF and pooled ([biasTable()]; its rows are also in `results`, test `B`, the quantity in `null`); `flagged`: ELFs for which G2 or G3 failed, whose skill tests are not meaningful.
 runWave1 <- function(elfs, minHa, nBoot = 999, nNull = 199, nPerm = 9999, seed = 1, adFun = fireSenseUtils:::adStatistic) {
   if (!length(elfs)) stop("runWave1(): no ELFs to score")
   names(elfs) <- vapply(elfs, `[[`, "", "elf")
@@ -71,13 +71,15 @@ runWave1 <- function(elfs, minHa, nBoot = 999, nNull = 199, nPerm = 9999, seed =
               measure = c("rhoModel", "rhoIndex", "rhoDiff", "pPermN0"), value = unlist(rank[i, c("rho", "rhoIndex", "rhoDiff", "pPerm")]),
               lo = NA_real_, hi = NA_real_, nELF = 1L, nUnits = rank$nYears[i]))))
   rankRows$test <- "S5"; rankRows$null <- ifelse(rankRows$measure == "pPermN0", "N0", "N2")
+  bias <- biasTable(elfs, nBoot, seed)
   res <- rbind(skillRows, calRows, rankRows)
   judged <- res$level == "pooled" & res$measure %in% c("skill", "rhoDiff") & res$null %in% c("N1", "N2")   # N0 is a floor, not judged
   res$verdict <- ifelse(judged & is.finite(res$lo),
                         ifelse(res$lo > 0, "beats null", ifelse(res$hi < 0, "worse than null", "no difference")), NA_character_)
   res <- res[, c("test", "null", "level", "ELF", "measure", "value", "lo", "hi", "nELF", "nUnits", "verdict")]
+  res <- rbind(res, biasResultRows(bias))
   rownames(res) <- NULL
-  list(results = res, gates = gates, perELF = perELF, flagged = flagged)
+  list(results = res, gates = gates, bias = bias, perELF = perELF, flagged = flagged)
 }
 
 bootRankRows <- function(rankD, nBoot, seed) {

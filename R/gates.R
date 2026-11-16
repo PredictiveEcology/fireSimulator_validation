@@ -76,6 +76,13 @@ perRun <- function(x, value, fun = sum) {
   as.numeric(tapply(x[[value]], x$run, fun))
 }
 
+## the statistic of a total over the scored years: the median over runs of each run's total of `col`, and its ratio to `obs`
+## (the observed total); used by G2 (area) and scoreBias() (area, ignitions, escapes)
+totalRatio <- function(col, obs) function(s) {
+  sim <- stats::median(perRun(s, col))
+  c(ratio = if (obs > 0) sim / obs else if (sim == 0) 1 else Inf, simHa = sim)
+}
+
 #' G2: whole-ELF area burned over the scored years within 0.25-4x of the observation
 #'
 #' Each run's total area over the scored years; the median run is compared with the observed total over the same years.
@@ -86,10 +93,7 @@ perRun <- function(x, value, fun = sum) {
 #' @param nBoot,seed Bootstrap over runs (`bootRuns()`) for `lo` and `hi`.
 gateG2 <- function(simYears, obsYears, years = unique(simYears$year), nBoot = 1000, seed = 1) {
   obs <- sum(obsYears$area50[obsYears$year %in% years])
-  stat <- function(s) {
-    sim <- stats::median(perRun(s, "area50"))
-    c(ratio = if (obs > 0) sim / obs else if (sim == 0) 1 else Inf, simHa = sim)
-  }
+  stat <- totalRatio("area50", obs)
   b <- bootRuns(simYears[simYears$year %in% years, , drop = FALSE], stat, nBoot, seed)
   gateRow("G2", inRatio(b$est[1]), b$est[1], sprintf("ratio %s; median run %.0f ha, observed %.0f ha, over %d years",
           withInterval(b$est[1], b), b$est[2], obs, length(years)), b$lo[1], b$hi[1], b$runLo[1], b$runHi[1], b$obsRank[1], b$nRuns)

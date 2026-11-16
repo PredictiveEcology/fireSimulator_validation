@@ -9,11 +9,12 @@
 #'
 #' @param elfs List of ELF inputs ([runWave1()]); `elf` is the id shown on the page.
 #' @param gates The `gates` table of [runWave1()] (its `ELF` values are the ids of `elfs`). Only G2, G4 and G6 are used.
+#' @param bias The `bias` table of [runWave1()] (per ELF and pooled), for the bias table of the page; `NULL`: no bias table.
 #' @param file Where to write the page. @param template Path of `pageTemplate.html`.
 #' @param title The page title (browser tab and heading). @param subtitle One line under the title. @param label Name of the simulated series in the figures. @param minHa Escape size.
 #' @param dpi Resolution of the inlined figures (80 keeps a 16-ELF page near 9 MB).
 #' @return `file`, invisibly.
-buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa, dpi = 80) {
+buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa, dpi = 80, bias = NULL) {
   ids <- vapply(elfs, `[[`, "", "elf"); names(elfs) <- ids
   summ <- summariseGates(gates); summ$ELF <- as.character(summ$ELF)
   summ$burnRate <- vapply(elfs[summ$ELF], function(e) e$burnRate %||% NA_real_, 0)      # for elfOrder(); an ELF input without one sorts last
@@ -33,9 +34,11 @@ buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast v
     r <- list(elf = id, burnRate = z$burnRate, gates = sum(gi$pass %in% TRUE), failed = paste(gi$gate[gi$pass %in% FALSE], collapse = " "))
     for (k in names(key)) r[[k]] <- round(c(z[[paste0(key[k], "_ratio")]], z[[paste0(key[k], "_runLo")]], z[[paste0(key[k], "_runHi")]], z[[paste0(key[k], "_obsRank")]]), 3)
     r })
+  biasRows <- biasPageRows(bias)
   tpl <- paste(readLines(template, warn = FALSE), collapse = "\n")
   fill <- function(pat, val) tpl <<- sub(pat, val, tpl, fixed = TRUE)
   fill("/*ROWS*/[]", as.character(jsonlite::toJSON(rows, auto_unbox = TRUE, na = "null")))
+  fill("/*BIAS*/[]", as.character(jsonlite::toJSON(biasRows, auto_unbox = TRUE, na = "null")))
   fill("/*IMG*/{}", as.character(jsonlite::toJSON(img, auto_unbox = TRUE)))
   tpl <- gsub("__OVERVIEW__", overview, tpl, fixed = TRUE)
   tpl <- gsub("__TITLE__", title, tpl, fixed = TRUE)
