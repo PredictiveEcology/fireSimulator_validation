@@ -1,8 +1,6 @@
 ## Analysis of variance of hindcast scores: which tested factors (modelling choices, ELF) move the scores.
 ## Model-agnostic: it sees score folders ([runWave1()] outputs, one per arm) and a table of factors per arm, nothing else.
 
-anovaSize <- list(width = 10, height = 6, dpi = 110, units = "in", bg = "white")
-
 #' Per-ELF scores of several arms as one long table, with the arms' factors
 #'
 #' Reads `wave1_results.csv` of each score folder (written by `mode = "score"`; it is the `results` of `wave1.rds`).
@@ -98,7 +96,7 @@ anovaCells <- function(long, factors) {
 plotAnova <- function(terms, baseSize = 15) {
   lv <- unique(terms$term)
   ggplot(terms, aes(x = metric, y = pctSS, fill = factor(term, lv))) + geom_col(width = 0.7) +
-    scale_fill_manual(values = stats::setNames(scales::hue_pal()(length(lv)), lv), name = NULL) +
+    scale_fill_manual(values = stats::setNames(rep_len(okabeIto, length(lv)), lv), name = NULL) +
     labs(x = NULL, y = "% of total sum of squares (sequential)") + theme_bw(base_size = baseSize)
 }
 
