@@ -44,9 +44,10 @@ runToyModule <- function(root, e, hc, ...) {
   withr::local_options(spades.useRequire = FALSE, spades.moduleCodeChecks = FALSE, .local_envir = parent.frame())
   SpaDES.core::simInitAndSpades(
     times = list(start = 0, end = 1), modules = "fireSimulator_validation",
-    params = list(fireSimulator_validation = list(hindcastPath = hc, hindcastYears = sort(unique(e$simYears$year)),
-                                                  inputsPath = file.path(root, "inputs"), ledgerSuffix = "_suffix",
-                                                  nBoot = 20L, nNull = 19L, nPerm = 99L, .plots = "png", pageTitle = "Toy page", ...)),
+    params = list(fireSimulator_validation = utils::modifyList(   # `...` may replace inputsPath
+      list(hindcastPath = hc, hindcastYears = sort(unique(e$simYears$year)),
+           inputsPath = file.path(root, "inputs"), ledgerSuffix = "_suffix",
+           nBoot = 20L, nNull = 19L, nPerm = 99L, .plots = "png", pageTitle = "Toy page"), list(...))),
     paths = list(modulePath = mp, outputPath = file.path(root, "outputs"), inputPath = file.path(root, "inputs"),
                  cachePath = file.path(root, "cache"), scratchPath = file.path(root, "scratch")))
 }
@@ -130,6 +131,26 @@ test_that("a replay hindcast, which saves no climate, is scored with covariatePa
   expect_error(runToyModule(root, e, hc), "no CMD_historical_9.9.tif in")
   sim <- runToyModule(root, e, hc, covariatePath = ref)
   expect_equal(sim$validationELFs[[1]]$covariate$value, e$covariate$value, tolerance = 1e-6)   # a float32 raster
+})
+
+test_that("where the hindcast is read from and how many cores read it are not in the init event's cache key: a copy of the hindcast read with other cores is a cache hit", {
+  skip_if_not_installed("SpaDES.core")
+  ## a cache built on one machine is then a hit on another, where hindcastPath and inputsPath differ; the scored content (validationELFs) is in the key
+  root <- withr::local_tempdir()
+  e <- toyElf(seed = 3, name = "9.9")
+  hc <- toyHindcastFiles(e, root)
+  out <- file.path(root, "outputs", "wave1.rds")
+  runToyModule(root, e, hc, .useCache = "init")
+  expect_true(file.exists(out))
+  file.remove(out)                                                       # an init that runs writes it again; a cached one does not
+  root2 <- file.path(root, "copy"); dir.create(root2)
+  file.copy(file.path(root, c("hindcast", "inputs")), root2, recursive = TRUE)
+  sim <- runToyModule(root, e, file.path(root2, "hindcast"), .useCache = "init", inputsPath = file.path(root2, "inputs"),
+                      covariatePath = file.path(root2, "hindcast"), nCores = 2L)
+  expect_false(file.exists(out))
+  expect_equal(vapply(sim$validationELFs, `[[`, "", "elf"), "9.9")
+  p <- SpaDES.core::params(sim)$fireSimulator_validation
+  expect_identical(p$nCores, 2L); expect_identical(p$hindcastPath, file.path(root2, "hindcast"))   # a hit keeps the current values
 })
 
 test_that("the module writes the bias rows to wave1_results.csv and the bias table to wave1.rds and validation.html", {
