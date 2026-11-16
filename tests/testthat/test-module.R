@@ -131,3 +131,16 @@ test_that("a replay hindcast, which saves no climate, is scored with covariatePa
   sim <- runToyModule(root, e, hc, covariatePath = ref)
   expect_equal(sim$validationELFs[[1]]$covariate$value, e$covariate$value, tolerance = 1e-6)   # a float32 raster
 })
+
+test_that("the module writes the bias rows to wave1_results.csv and the bias table to wave1.rds and validation.html", {
+  skip_if_not_installed("SpaDES.core")
+  root <- withr::local_tempdir()
+  e <- toyElf(seed = 3, name = "9.9")
+  hc <- toyHindcastFiles(e, root)
+  out <- file.path(root, "outputs")
+  sim <- runToyModule(root, e, hc)
+  b <- utils::read.csv(file.path(out, "wave1_results.csv")); b <- b[b$test == "B", ]
+  expect_setequal(b$measure, c("ratio", "log2ratio", "meanRatio")); expect_setequal(b$null, c("area", "top10", "ignitions", "escapes"))
+  expect_equal(readRDS(file.path(out, "wave1.rds"))$bias, sim$validationResults$bias)
+  expect_match(paste(readLines(file.path(out, "validation.html"), warn = FALSE), collapse = "\n"), "all: median of ELFs", fixed = TRUE)
+})

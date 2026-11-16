@@ -8,7 +8,7 @@ defineModule(sim, list(
   keywords = c("fire", "validation", "hindcast", "CRPS"),
   authors = c(person("Eliot", "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = c("aut", "cre"))),
   childModules = character(0),
-  version = list(fireSimulator_validation = "0.0.0.9018"),
+  version = list(fireSimulator_validation = "0.0.0.9019"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list(),
@@ -88,7 +88,7 @@ defineModule(sim, list(
   ),
   outputObjects = bindrows(
     createsOutput("anovaResults", "list", "Mode 'anova': `terms` (per metric and term: df, pctSS, dropOnePctSS, F, p, note), `cells` and `long`, from runAnova(); the first two are also written to <outputPath>/anova_terms.csv and anova_cells.csv."),
-    createsOutput("validationResults", "list", "runWave1() result: results, gates, perELF, flagged. Also saved to <outputPath>/wave1.rds, its results table to wave1_results.csv, and the page to validation.html.")
+    createsOutput("validationResults", "list", "runWave1() result: results, gates, bias, perELF, flagged. Also saved to <outputPath>/wave1.rds, its results table to wave1_results.csv, and the page to validation.html.")
   )
 ))
 
@@ -153,7 +153,7 @@ doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
       buildValidationPage(sim$validationELFs, sim$validationResults$gates, file.path(out, "validation.html"),
                           template = file.path(modulePath(sim), currentModule(sim), "pageTemplate.html"),
                           title = P(sim)$pageTitle, subtitle = P(sim)$pageSubtitle, label = P(sim)$simLabel,
-                          minHa = scoredMinHa(P(sim)), dpi = P(sim)$pageDpi)
+                          minHa = scoredMinHa(P(sim)), dpi = P(sim)$pageDpi, bias = sim$validationResults$bias)
     },
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
                   "' in module '", current(sim)[1, "moduleName", with = FALSE], "'", sep = ""))
