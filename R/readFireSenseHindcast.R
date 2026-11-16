@@ -139,6 +139,7 @@ readHindcastObserved <- function(rec, hindcastDir, elf, scored, minHa) {
 readHindcastCovariate <- function(hindcastDir, elf, core, variable = "CMD") {
   nm <- paste0(variable, "_historical_", elf, ".tif")
   f <- c(Sys.glob(file.path(hindcastDir, elf, "climate", nm)), Sys.glob(file.path(hindcastDir, elf, "*", "*", "climate", nm)))[1]
+  if (is.na(f)) stop("no ", nm, " in ", file.path(hindcastDir, elf), " (climate/ or <year>/<set>/climate/)")
   r <- terra::rast(f)
   cr <- terra::crop(r, terra::ext(core))
   m <- if (terra::compareGeom(cr, core, stopOnError = FALSE)) core else terra::resample(core, cr, "near")
@@ -176,13 +177,14 @@ burnRate <- function(core, obsYears) {
 #' @param nfdbPath,nbacPath Observation shapefiles. @param obsCacheDir Cache folder of [observedRecord()].
 #' @param years Scored years (only those with every set finished are used). @param sets Sets. @param inputsDir See [hindcastCore()].
 #' @param cores Forked workers for the observed record. @param fireCauses,escapeSizeHa See [observedRecord()]; use the ones the hindcast ran with.
+#' @param covariateDir Hindcast folder the climate covariate is read from ([readHindcastCovariate()]); a replay hindcast has none of its own.
 #' @param minHa Escape size scored (the simulated and observed `escapes`, `area50` and sizes); default `escapeSizeHa`.
 #' @return The list [runWave1()] documents, with `burnableHa` and `burnRate` ([burnRate()]) and the escape definition of the observed record
 #'   (`escapeSizeHa`, `fireCauses`); `NULL` if no year is finished.
 readFireSenseHindcast <- function(elf, hindcastDir, ledgerFile = NULL, nfdbPath, nbacPath, obsCacheDir,
                                   years = seq(1986L, 2021L, 5L), sets = 1:5, inputsDir = "/mnt/fast/inputs", cores = 1L,
                                   fireCauses = fireSenseUtils::fireSenseFireCauses, escapeSizeHa = fireSenseUtils::fireSenseEscapeSizeHa,
-                                  minHa = escapeSizeHa) {
+                                  minHa = escapeSizeHa, covariateDir = hindcastDir) {
   done <- hindcastFinishedYears(hindcastDir, elf, years, sets)
   if (!length(done)) return(NULL)
   sim <- readHindcastSim(hindcastDir, elf, done, sets, minHa)
@@ -194,5 +196,5 @@ readFireSenseHindcast <- function(elf, hindcastDir, ledgerFile = NULL, nfdbPath,
   fit <- if (is.null(ledgerFile)) list() else readLedgerRow(ledgerFile, elf)
   fit$fitAreaHa <- obs$fitAreaHa; fit$totalAreaHa <- obs$nbacAreaHa
   c(list(elf = elf), sim, obs[c("obsYears", "obsSizes", "escapeSizeHa", "fireCauses")], burnRate(core, obs$obsYears),
-    list(covariate = readHindcastCovariate(hindcastDir, elf, core), fit = fit))
+    list(covariate = readHindcastCovariate(covariateDir, elf, core), fit = fit))
 }
