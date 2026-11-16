@@ -47,7 +47,16 @@ defineModule(sim, list(
                           "gate ratios with single-run 2.5-97.5% ranges, annual-area skill and gate results, one row per set, written to wave1_bySet.csv.")),
     defineParameter("mode", "character", "score", NA, NA,
                     paste("'score': score the hindcast (the default). 'weights': tune objective weights from `weightsTerms`, `weightsBySet` and `weightsGrid` (`tuneWeights()`):",
-                          "no hindcast is read; the tables `weights_report.csv` (the held-out ELFs' rows: the result), `weights_tuning.csv` (tune ELFs, labelled) and `weights_losses.csv` go to outputPath.")),
+                          "no hindcast is read; the tables `weights_report.csv` (the held-out ELFs' rows: the result), `weights_tuning.csv` (tune ELFs, labelled) and `weights_losses.csv` go to outputPath.",
+                          "'anova': partition the variation of the per-ELF skill scores of several arms among ELF, the arms' factors and their interactions, from `anovaScores`, `anovaFactors` and `anovaMetrics` (`runAnova()`):",
+                          "no hindcast is read; `anova_terms.csv` and `anova_cells.csv` go to outputPath, with one figure.")),
+    defineParameter("anovaScores", "character", NA_character_, NA, NA,
+                    paste("Mode 'anova': score folders (outputPath of mode 'score': wave1_results.csv), one arm each. The arm is the name in this vector, else the folder's basename;",
+                          "folders with one arm name are combined (the ELFs of one arm scored in several folders).")),
+    defineParameter("anovaFactors", "ANY", NA_character_, NA, NA,
+                    "Mode 'anova': csv path or data.frame, column `arm` (as named by `anovaScores`) and one column per factor."),
+    defineParameter("anovaMetrics", "character", NA_character_, NA, NA,
+                    "Mode 'anova': per-ELF skill metrics analysed, `<test>_<null>_skill` (e.g. S1_N1_skill, S3_N1_skill, S4largest_N1_skill). NA: every `*_N1_skill` in the scores."),
     defineParameter("weightsTerms", "character", NA_character_, NA, NA,
                     paste("Mode 'weights': csv files of raw objective terms, one per ELF as fireSense_spreadFit writes them (`spreadFitTerms_<runName>.csv`: `member`, `rep`, parameters, terms; the ELF is read from the file name (the one token like `4.3` or `6.6.2`; an ambiguous name must be given by naming the file with its ELF in this vector)),",
                           "or one file with an `ELF` column. `member` must be the `paramSet` of the bySet scores; replicates (`rep`) are reduced to their median.")),
@@ -78,6 +87,7 @@ defineModule(sim, list(
                  "One plain list per ELF: elf, simYears, simSizes, obsYears, obsSizes, covariate, fit (see runWave1()). A simulator-specific reader builds them; for fireSense, readFireSenseHindcast().")
   ),
   outputObjects = bindrows(
+    createsOutput("anovaResults", "list", "Mode 'anova': `terms` (per metric and term: df, pctSS, dropOnePctSS, F, p, note), `cells` and `long`, from runAnova(); the first two are also written to <outputPath>/anova_terms.csv and anova_cells.csv."),
     createsOutput("validationResults", "list", "runWave1() result: results, gates, perELF, flagged. Also saved to <outputPath>/wave1.rds, its results table to wave1_results.csv, and the page to validation.html.")
   )
 ))
@@ -111,7 +121,11 @@ scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
 
 doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
   switch(eventType,
-    init = if (P(sim)$mode == "weights") {
+    init = if (P(sim)$mode == "anova") {
+      p <- P(sim)
+      sim$anovaResults <- runAnova(p$anovaScores, p$anovaFactors, if (!anyNA(p$anovaMetrics)) p$anovaMetrics, outDir = outputPath(sim))
+      Plots(data = sim$anovaResults$terms, fn = plotAnova, filename = "anova", ggsaveArgs = anovaSize)
+    } else if (P(sim)$mode == "weights") {
       p <- P(sim); out <- outputPath(sim)
       orNULL <- function(x) if (length(x)) x
       runWeights(p$weightsTerms, if (is.na(p$weightsBySet)) file.path(out, "wave1_bySet.csv") else p$weightsBySet, p$weightsGrid, outDir = out,
