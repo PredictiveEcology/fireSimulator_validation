@@ -60,7 +60,7 @@ test_that("runWave1 returns the bias table and its rows in the long results tabl
   r <- runWave1(list(e), minHa = toyMinHa, nBoot = 20, nNull = 19, nPerm = 99)
   expect_equal(r$bias, biasTable(list(e), nBoot = 20))
   bb <- r$results[r$results$test == "B", ]
-  expect_setequal(bb$measure, c("ratio", "log2ratio")); expect_setequal(bb$null, names(biasQuantities)); expect_setequal(bb$level, c("ELF", "pooled"))
+  expect_setequal(bb$measure, c("ratio", "log2ratio", "meanRatio")); expect_setequal(bb$null, names(biasQuantities)); expect_setequal(bb$level, c("ELF", "pooled"))
   x <- bb[bb$level == "ELF" & bb$measure == "ratio" & bb$null == "area", ]
   expect_equal(x$value, bq(r$bias, "area")$ratio[1]); a <- bq(r$bias, "area")[1, ]; expect_equal(c(x$lo, x$hi), c(a$runLo, a$runHi))
   expect_equal(r$results$value[r$results$test == "B" & r$results$measure == "log2ratio"], log2(r$results$value[r$results$test == "B" & r$results$measure == "ratio"]))
@@ -100,4 +100,22 @@ test_that("pooling reports how many ELFs are in the median and how many were lef
   p <- poolBias(rbind(ok, bad)); a <- bq(p, "top10")
   expect_equal(a$nELF, 2L); expect_equal(a$nNonFinite, 1L); expect_equal(a$ratio, bq(ok, "top10")$ratio)
   expect_equal(poolBias(ok)$nNonFinite, rep(0L, 4)); expect_equal(unique(poolBias(ok)$nELF), 1L)
+})
+
+test_that("the mean-run ratio differs from the median-run ratio for a skewed set of runs, and the 10 largest have none", {
+  e <- toyElf(seed = 4, perfect = TRUE)
+  e$simYears$area50[e$simYears$run == 1L] <- e$simYears$area50[e$simYears$run == 1L] * 21     # one run 21x: 19 runs at 1, one at 21
+  b <- scoreBias(e, nBoot = 20); a <- bq(b, "area")
+  expect_equal(a$ratio, 1); expect_equal(a$meanRatio, 2)                                     # (19 + 21) / 20
+  expect_equal(a$simMean, 2 * a$observed); expect_true(a$meanLo <= a$meanRatio && a$meanRatio <= a$meanHi)
+  expect_equal(bq(b, "ignitions")$meanRatio, 1); expect_equal(bq(b, "escapes")$meanRatio, 1)
+  expect_true(is.na(bq(b, "top10")$meanRatio))
+  tb <- biasTable(list(e, scaleSim(toyElf(seed = 5, perfect = TRUE, name = "a"), 3)), nBoot = 20)
+  p <- bq(tb[tb$level == "pooled", ], "area"); el <- bq(tb[tb$level == "ELF", ], "area")
+  expect_equal(p$meanRatio, median(el$meanRatio)); expect_equal(c(p$meanLo, p$meanHi), range(el$meanRatio))
+  expect_equal(p$meanRatioOfSums, sum(el$simMean) / sum(el$observed))
+  m <- biasResultRows(tb); m <- m[m$measure == "meanRatio", ]
+  expect_equal(sort(unique(m$null)), c("area", "escapes", "ignitions")); expect_equal(m$value[m$level == "ELF" & m$null == "area"], el$meanRatio)
+  ## G2 is unchanged by the extra statistics
+  g <- runGates(e, nBoot = 20, seed = 1); expect_equal(g$value[g$gate == "G2"], a$ratio)
 })

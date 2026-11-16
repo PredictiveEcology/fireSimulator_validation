@@ -121,6 +121,9 @@ td a:hover { text-decoration: underline; }
             <th><button type="button" data-b="top10">10 largest fires</button></th>
             <th><button type="button" data-b="ignitions">Ignitions</button></th>
             <th><button type="button" data-b="escapes">Escapes</button></th>
+            <th><button type="button" data-b="areaMean">Mean area</button></th>
+            <th><button type="button" data-b="ignitionsMean">Mean ignitions</button></th>
+            <th><button type="button" data-b="escapesMean">Mean escapes</button></th>
             <th><button type="button" data-b="areaDiff">Area, ha per 1000 yr</button></th>
             <th><button type="button" data-b="ignitionsDiff">Ignitions per 1000 yr</button></th>
             <th><button type="button" data-b="escapesDiff">Escapes per 1000 yr</button></th>
@@ -128,7 +131,7 @@ td a:hover { text-decoration: underline; }
           <tbody id="biasRows"></tbody>
         </table>
       </div>
-      <p class="note">Ratio of the median run to the observed record over the scored years; 1 is no bias. Small numbers: the 95% range of single runs (the "all" row: the range over ELFs); "obs N%": the share of runs below the observed record. Per 1000 yr: how far the median run's total drifts from the observed rate over 1000 years (simulated minus observed; the totals only). "all: median of ELFs" treats every ELF alike; "all: ratio of sums" is dominated by the large ELFs.</p>
+      <p class="note">Ratio of the median run to the observed record over the scored years; 1 is no bias. The mean columns are the same ratio for the mean over runs (what compounds over a long run; the median is the robust centre). The mean columns have no observed rank. Small numbers: the 95% range of single runs (the "all" row: the range over ELFs); "obs N%": the share of runs below the observed record. Per 1000 yr: how far the median run's total drifts from the observed rate over 1000 years (simulated minus observed; the totals only). "all: median of ELFs" treats every ELF alike; "all: ratio of sums" is dominated by the large ELFs.</p>
     </section>
 
     <section id="rank">
@@ -252,7 +255,7 @@ const markScore = bindSort("k", { get k() { return sortK; }, set k(x) { sortK = 
 
 // Bias table: the same cells (ratioCell), each with data-v
 const biasSort = { k: "elf", d: 1 };
-const BCOLS = ["area", "top10", "ignitions", "escapes"], DCOLS = ["areaDiff", "ignitionsDiff", "escapesDiff"];
+const BCOLS = ["area", "top10", "ignitions", "escapes", "areaMean", "ignitionsMean", "escapesMean"], DCOLS = ["areaDiff", "ignitionsDiff", "escapesDiff"];
 function renderBias() {
   const v = r => Array.isArray(r[biasSort.k]) ? r[biasSort.k][0] : r[biasSort.k];
   document.getElementById("biasRows").innerHTML = sortRows(BIAS, biasSort.k, biasSort.d, v, r => /^all/.test(r.elf)).map(r => {   // the pooled rows stay on top

@@ -77,10 +77,10 @@ perRun <- function(x, value, fun = sum) {
 }
 
 ## the statistic of a total over the scored years: the median over runs of each run's total of `col`, and its ratio to `obs`
-## (the observed total); used by G2 (area) and scoreBias() (area, ignitions, escapes)
+## (the observed total), and the same with the mean over runs; used by G2 (area) and scoreBias() (area, ignitions, escapes)
 totalRatio <- function(col, obs) function(s) {
-  sim <- stats::median(perRun(s, col))
-  c(ratio = zeroSafeRatio(sim, obs), simHa = sim)
+  tot <- perRun(s, col); sim <- stats::median(tot); m <- mean(tot)
+  c(ratio = zeroSafeRatio(sim, obs), simHa = sim, meanRatio = zeroSafeRatio(m, obs), simMean = m)   # G2 reads the first two; scoreBias() the mean too
 }
 ## sim / obs; with nothing observed: 1 when nothing is simulated either, else Inf
 zeroSafeRatio <- function(sim, obs) if (obs > 0) sim / obs else if (sim == 0) 1 else Inf
