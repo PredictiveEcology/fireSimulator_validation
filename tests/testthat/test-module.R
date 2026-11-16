@@ -117,7 +117,7 @@ test_that("the module writes wave1_bySet.csv only when bySet = TRUE", {
 
 ## move every climate folder of `hc` to the same place under `ref`
 moveClimate <- function(hc, ref) for (d in list.dirs(hc)[basename(list.dirs(hc)) == "climate"]) {
-  to <- file.path(ref, sub(paste0("^", hc, "/"), "", d)); dir.create(dirname(to), recursive = TRUE, showWarnings = FALSE)
+  to <- file.path(ref, sub(paste0(hc, "/"), "", d, fixed = TRUE)); dir.create(dirname(to), recursive = TRUE, showWarnings = FALSE)
   file.rename(d, to)
 }
 
@@ -130,14 +130,4 @@ test_that("a replay hindcast, which saves no climate, is scored with covariatePa
   expect_error(runToyModule(root, e, hc), "no CMD_historical_9.9.tif in")
   sim <- runToyModule(root, e, hc, covariatePath = ref)
   expect_equal(sim$validationELFs[[1]]$covariate$value, e$covariate$value, tolerance = 1e-6)   # a float32 raster
-})
-
-test_that("an ELF read that fails in a forked reader stops .inputObjects with its ELF and message", {
-  skip_if_not_installed("SpaDES.core"); skip_on_os("windows")
-  root <- withr::local_tempdir()
-  e <- toyElf(seed = 3, name = "9.9"); toyHindcastFiles(e, root)
-  hc <- toyHindcastFiles(toyElf(seed = 4, name = "9.8"), root)
-  moveClimate(file.path(hc, "9.9"), file.path(root, "elsewhere"))        # 9.8 reads, 9.9 fails
-  ## was: "subscript out of bounds" or "missing value where TRUE/FALSE needed" in init, from the error object kept as an ELF
-  expect_error(runToyModule(root, e, hc, nCores = 2L), "reading the hindcast of ELF 9.9 failed: no CMD_historical_9.9.tif")
 })

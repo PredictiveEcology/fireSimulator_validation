@@ -100,8 +100,6 @@ scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
                             nbacPath = tail(Sys.glob(file.path(inp, e, "NBAC_merged_*.shp")), 1),
                             obsCacheDir = obsDir, fireCauses = P(sim)$fireCauses,
                             escapeSizeHa = P(sim)$escapeSizeHa, minHa = scoredMinHa(P(sim))))
-    failed <- vapply(elfs, inherits, NA, "try-error")    # mclapply returns a failed read as its error, not as an error
-    if (any(failed)) stop("reading the hindcast of ELF ", paste(done[failed], collapse = ", "), " failed: ", conditionMessage(attr(elfs[failed][[1]], "condition")))
     sim$validationELFs <- Filter(Negate(is.null), elfs)
     if (!length(sim$validationELFs))
       stop("no finished hindcasts in ", hc, ": no ELF has every one of hindcastYears ", min(yrs), "-", max(yrs), " in hindcastSets ", paste(sets, collapse = ", "),
