@@ -8,6 +8,7 @@
 ## sizes (inches, dpi) of the figures for Plots(ggsaveArgs = )
 panelSize <- list(width = 16, height = 12, dpi = 110, units = "in", bg = "white")
 overviewSize <- list(width = 16, height = 9, dpi = 110, units = "in", bg = "white")
+anovaSize <- list(width = 10, height = 6, dpi = 110, units = "in", bg = "white")
 
 ## the five ratios of the gates, in the order the figures show them: key (summary column prefix), label
 gateRatios <- c(area = "area", top10_median = "median of 10 largest fires", ignitions = "ignitions",
