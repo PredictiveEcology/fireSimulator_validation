@@ -114,3 +114,20 @@ test_that("the module writes wave1_bySet.csv only when bySet = TRUE", {
   b <- utils::read.csv(f)
   expect_equal(nrow(b), 1L); expect_equal(as.character(b$ELF), "9.9")
 })
+
+## move every climate folder of `hc` to the same place under `ref`
+moveClimate <- function(hc, ref) for (d in list.dirs(hc)[basename(list.dirs(hc)) == "climate"]) {
+  to <- file.path(ref, sub(paste0(hc, "/"), "", d, fixed = TRUE)); dir.create(dirname(to), recursive = TRUE, showWarnings = FALSE)
+  file.rename(d, to)
+}
+
+test_that("a replay hindcast, which saves no climate, is scored with covariatePath's climate; without it the run stops naming the file", {
+  skip_if_not_installed("SpaDES.core")
+  root <- withr::local_tempdir()
+  e <- toyElf(seed = 3, name = "9.9")
+  hc <- toyHindcastFiles(e, root)
+  ref <- file.path(root, "reference"); moveClimate(hc, ref)              # the reference hindcast keeps the climate
+  expect_error(runToyModule(root, e, hc), "no CMD_historical_9.9.tif in")
+  sim <- runToyModule(root, e, hc, covariatePath = ref)
+  expect_equal(sim$validationELFs[[1]]$covariate$value, e$covariate$value, tolerance = 1e-6)   # a float32 raster
+})

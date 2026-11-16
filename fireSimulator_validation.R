@@ -38,6 +38,8 @@ defineModule(sim, list(
     ## the fireSense reader: used only when validationELFs is not supplied
     defineParameter("hindcastPath", "character", NA_character_, NA, NA,
                     "FireSense hindcast outputs, <hindcastPath>/<ELF>/<year>/<set>/. When set and validationELFs is not supplied, every ELF there that has finished all hindcastYears is read with readFireSenseHindcast()."),
+    defineParameter("covariatePath", "character", NA_character_, NA, NA,
+                    "Hindcast outputs the climate covariate (CMD) is read from, laid out as hindcastPath; NA: hindcastPath. A replay hindcast (fireSense_burn ignitionSource = 'replay') saves no climate: use its reference hindcast's folder, whose climate it replayed."),
     defineParameter("hindcastYears", "integer", 1986:2024, NA, NA, "Scored years; an ELF is scored only when every one is finished."),
     defineParameter("hindcastSets", "integer", 1L, NA, NA, "Hindcast parameter sets (<set> folders) read."),
     defineParameter("bySet", "logical", FALSE, NA, NA,
@@ -92,7 +94,7 @@ scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
     done <- Filter(function(e) length(hindcastFinishedYears(hc, e, yrs, sets)) == length(yrs),
                    setdiff(list.files(hc), P(sim)$skipELFs))
     elfs <- parallel::mclapply(done, mc.cores = P(sim)$nCores, mc.preschedule = FALSE, function(e)
-      readFireSenseHindcast(e, hc, years = yrs, sets = sets, inputsDir = inp,
+      readFireSenseHindcast(e, hc, years = yrs, sets = sets, inputsDir = inp, covariateDir = if (is.na(P(sim)$covariatePath)) hc else P(sim)$covariatePath,
                             ledgerFile = Sys.glob(file.path(inp, e, paste0("fireSenseParams_*", P(sim)$ledgerSuffix, ".rds")))[1],
                             nfdbPath = tail(Sys.glob(file.path(inp, e, "NFDB_point_*.shp")), 1),
                             nbacPath = tail(Sys.glob(file.path(inp, e, "NBAC_merged_*.shp")), 1),
