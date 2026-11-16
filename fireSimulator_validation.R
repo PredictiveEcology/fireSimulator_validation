@@ -14,7 +14,7 @@ defineModule(sim, list(
   citation = list(),
   documentation = list("README.md"),
   reqdPkgs = list("data.table", "MASS", "withr", "ggplot2", "patchwork", "scales", "jsonlite", "terra",
-                  "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9037)", # 9037: reads `.neverCache`
+                  "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9047)", # 9037: reads `.neverCache`; 9047: defineParameter(cacheKey = FALSE)
                   "FOR-CAST/fireregimetools@main (>= 0.1.0.9001)", "PredictiveEcology/fireSenseUtils@development (>= 0.2.3.9158)"),
   parameters = bindrows(
     defineParameter("nBoot", "integer", 999L, 1L, NA, "Bootstrap resamples of ELFs and years for the pooled verdicts."),
@@ -37,9 +37,11 @@ defineModule(sim, list(
     defineParameter(".plotInitialTime", "numeric", 1, NA, NA, "When the figures are drawn on screen; NA for never."),
     ## the fireSense reader: used only when validationELFs is not supplied
     defineParameter("hindcastPath", "character", NA_character_, NA, NA,
-                    "FireSense hindcast outputs, <hindcastPath>/<ELF>/<year>/<set>/. When set and validationELFs is not supplied, every ELF there that has finished all hindcastYears is read with readFireSenseHindcast()."),
+                    "FireSense hindcast outputs, <hindcastPath>/<ELF>/<year>/<set>/. When set and validationELFs is not supplied, every ELF there that has finished all hindcastYears is read with readFireSenseHindcast().",
+                    cacheKey = FALSE), # only .inputObjects (never cached) reads it; the ELFs it gives are in init's key
     defineParameter("covariatePath", "character", NA_character_, NA, NA,
-                    "Hindcast outputs the climate covariate (CMD) is read from, laid out as hindcastPath; NA: hindcastPath. A replay hindcast (fireSense_burn ignitionSource = 'replay') saves no climate: use its reference hindcast's folder, whose climate it replayed."),
+                    "Hindcast outputs the climate covariate (CMD) is read from, laid out as hindcastPath; NA: hindcastPath. A replay hindcast (fireSense_burn ignitionSource = 'replay') saves no climate: use its reference hindcast's folder, whose climate it replayed.",
+                    cacheKey = FALSE), # as hindcastPath
     defineParameter("hindcastYears", "integer", 1986:2024, NA, NA, "Scored years; an ELF is scored only when every one is finished."),
     defineParameter("hindcastSets", "integer", 1L, NA, NA, "Hindcast parameter sets (<set> folders) read."),
     defineParameter("bySet", "logical", FALSE, NA, NA,
@@ -65,9 +67,10 @@ defineModule(sim, list(
                     "Mode 'weights': bySet scores of other years to select on (to tune and report on the same ELFs). NA: `weightsBySet`."),
     defineParameter("skipELFs", "character", character(0), NA, NA, "ELFs of hindcastPath left out."),
     defineParameter("inputsPath", "character", NA_character_, NA, NA,
-                    "Folder of the ELF input folders: <inputsPath>/<ELF>/ has rtml_<ELF>.tif, the spread-fit ledger fireSenseParams_*<ledgerSuffix>.rds and the NFDB_point_*.shp and NBAC_merged_*.shp observations (the latest of each)."),
+                    "Folder of the ELF input folders: <inputsPath>/<ELF>/ has rtml_<ELF>.tif, the spread-fit ledger fireSenseParams_*<ledgerSuffix>.rds and the NFDB_point_*.shp and NBAC_merged_*.shp observations (the latest of each).",
+                    cacheKey = FALSE), # as hindcastPath
     defineParameter("ledgerSuffix", "character", "", NA, NA, "Suffix of the spread-fit ledger, e.g. '_crpsCauseAnnD03WholeLong_20261108'."),
-    defineParameter("nCores", "integer", 1L, 1L, NA, "ELFs read at once (forked)."),
+    defineParameter("nCores", "integer", 1L, 1L, NA, "ELFs read at once (forked).", cacheKey = FALSE), # how many read at once, not what is read
     ## the page: <outputPath>/validation.html, beside wave1.rds and wave1_results.csv
     defineParameter("pageTitle", "character", "Hindcast validation", NA, NA, "Title of validation.html."),
     defineParameter("pageSubtitle", "character", "", NA, NA, "Subtitle of validation.html."),
