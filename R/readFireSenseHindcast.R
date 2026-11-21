@@ -202,10 +202,10 @@ readFireSenseHindcast <- function(elf, hindcastDir, ledgerFile = NULL, nfdbPath,
 #' The files [readFireSenseHindcast()] reads for one ELF
 #'
 #' The hindcast's csv, burn map and climate files, the ELF's `rtml` raster, the ledger and the NFDB and NBAC shapefiles (with their
-#' sidecar files). @param elf,hindcastDir,inputsDir,covariateDir,ledgerFile,nfdbPath,nbacPath As [readFireSenseHindcast()].
+#' sidecar files) of the scored `years` and `sets`. @param elf,hindcastDir,inputsDir,covariateDir,ledgerFile,nfdbPath,nbacPath,years,sets As [readFireSenseHindcast()].
 #' @return Character vector of the files that exist.
-hindcastReadFiles <- function(elf, hindcastDir, inputsDir, covariateDir, ledgerFile, nfdbPath, nbacPath) {
-  hc <- function(d) list.files(file.path(d, elf), "^hindcast_.*\\.(csv|tif)$|^[A-Za-z]+_historical_.*\\.tif$", recursive = TRUE, full.names = TRUE)
+hindcastReadFiles <- function(elf, hindcastDir, inputsDir, covariateDir, ledgerFile, nfdbPath, nbacPath, years, sets) {
+  hc <- function(d) list.files(file.path(d, elf, c("climate", outer(years, sets, file.path))), "^hindcast_.*\\.(csv|tif)$|^[A-Za-z]+_historical_.*\\.tif$", recursive = TRUE, full.names = TRUE)
   shp <- unlist(lapply(c(nfdbPath, nbacPath), function(f) Sys.glob(paste0(tools::file_path_sans_ext(f), ".*"))))
   f <- c(hc(hindcastDir), hc(covariateDir), Sys.glob(file.path(inputsDir, elf, c("", "NRV/370/1"), paste0("rtml_", elf, ".tif"))), ledgerFile, shp)
   sort(unique(f[file.exists(f)]))
@@ -227,14 +227,16 @@ readerCallees <- c("hindcastFinishedYears", "readHindcastSim", "hindcastBurnMap"
 #' @return List of [readFireSenseHindcast()] results, in the order of `elfs`.
 readHindcastELFs <- function(elfs, hindcastDir, years, sets, inputsDir, ledgerSuffix, covariateDir = hindcastDir, obsCacheDir, elfCacheDir,
                              fireCauses, escapeSizeHa, minHa, nCores = 1L, reader = readFireSenseHindcast) {
-  deps <- c(lapply(readerCallees, get, envir = environment(readFireSenseHindcast)), list(fireSenseUtils::escapeFireSetDeps(), fireSenseUtils::inELFCore))
+  deps <- c(lapply(readerCallees, get, envir = environment(readFireSenseHindcast)), list(fireSenseUtils::escapeFireSetDeps()))
   res <- parallel::mclapply(stats::setNames(elfs, elfs), mc.cores = nCores, mc.preschedule = FALSE, function(e) {
     ledger <- Sys.glob(file.path(inputsDir, e, paste0("fireSenseParams_*", ledgerSuffix, ".rds")))[1]
     nfdb <- tail(Sys.glob(file.path(inputsDir, e, "NFDB_point_*.shp")), 1); nbac <- tail(Sys.glob(file.path(inputsDir, e, "NBAC_merged_*.shp")), 1)
-    f <- hindcastReadFiles(e, hindcastDir, inputsDir, covariateDir, ledger, nfdb, nbac)
+    f <- hindcastReadFiles(e, hindcastDir, inputsDir, covariateDir, ledger, nfdb, nbac, years, sets)
     stamp <- file.info(f)[, c("size", "mtime")]; stamp$mtime <- as.numeric(stamp$mtime)
-    reproducible::Cache(reader, e, hindcastDir, years = years, sets = sets, inputsDir = inputsDir, covariateDir = covariateDir, ledgerFile = ledger,
-                        nfdbPath = nfdb, nbacPath = nbac, obsCacheDir = obsCacheDir, fireCauses = fireCauses, escapeSizeHa = escapeSizeHa, minHa = minHa,
+    rownames(stamp) <- sub(paste0("^(", paste(unique(c(hindcastDir, inputsDir, covariateDir)), collapse = "|"), ")/?"), "", f)   # the key holds no absolute path
+    asPath <- reproducible::asPath                      # a path in the key is its last element only, so the key is the same wherever the folders are
+    reproducible::Cache(reader, e, asPath(hindcastDir), years = years, sets = sets, inputsDir = asPath(inputsDir), covariateDir = asPath(covariateDir),
+                        ledgerFile = asPath(ledger), nfdbPath = asPath(nfdb), nbacPath = asPath(nbac), obsCacheDir = obsCacheDir, fireCauses = fireCauses, escapeSizeHa = escapeSizeHa, minHa = minHa,
                         omitArgs = "obsCacheDir", .cacheExtra = list(files = stamp, callees = deps), cachePath = elfCacheDir)
   })
   res <- lapply(res, function(x) { attr(x, ".Cache") <- NULL; x })     # Cache() marks a result as new or loaded; Cache() returns a NULL result as the string "NULL"

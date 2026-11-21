@@ -214,3 +214,21 @@ test_that("readHindcastELFs stops naming the ELF whose read failed or returned n
   ok <- do.call(readHindcastELFs, elfReadArgs(root, c("1.1", "2.2", "3.3"), countingReader(counter)))   # a failed read was not cached
   expect_length(ok, 3L)
 })
+
+test_that("readHindcastELFs: the same hindcast under another root is a cache hit; a hit equals a miss, data.table elements included; an unscored year changes nothing", {
+  skip_if_not_installed("reproducible")
+  root <- withr::local_tempdir(); counter <- file.path(root, "n.txt")
+  mkFakeSet(root, "1.1")
+  rd <- countingReader(counter)
+  dtReader <- function(...) { x <- rd(...); x$dt <- data.table::data.table(a = 1:3, b = letters[1:3]); x }
+  a <- do.call(readHindcastELFs, elfReadArgs(root, "1.1", dtReader))
+  root2 <- withr::local_tempdir(); file.copy(file.path(root, "hindcast"), root2, recursive = TRUE, copy.date = TRUE)   # same files, same times, another place
+  args2 <- elfReadArgs(root2, "1.1", dtReader, elfCacheDir = file.path(root, "elfs"))
+  b <- do.call(readHindcastELFs, args2)
+  expect_equal(length(readLines(counter)), 1L)                     # root2 is a hit
+  expect_true(isTRUE(all.equal(a, b)))
+  expect_s3_class(b[[1]]$dt, "data.table"); expect_equal(b[[1]]$dt$b, letters[1:3])
+  mkFakeSet(root, "1.1", y = 2001)                                 # a year that is not scored
+  do.call(readHindcastELFs, elfReadArgs(root, "1.1", dtReader))
+  expect_equal(length(readLines(counter)), 1L)
+})
