@@ -165,3 +165,52 @@ test_that("the module writes the bias rows to wave1_results.csv and the bias tab
   expect_equal(readRDS(file.path(out, "wave1.rds"))$bias, sim$validationResults$bias)
   expect_match(paste(readLines(file.path(out, "validation.html"), warn = FALSE), collapse = "\n"), "all: median of ELFs", fixed = TRUE)
 })
+
+## readHindcastELFs(): each ELF's read is cached; a failed read stops the job naming the ELF
+elfReadArgs <- function(root, elfs, reader, ...) {
+  utils::modifyList(list(elfs, file.path(root, "hindcast"), years = 1986L, sets = 1L, inputsDir = file.path(root, "inputs"), ledgerSuffix = "_suffix",
+         obsCacheDir = file.path(root, "obs"), elfCacheDir = file.path(root, "elfs"), fireCauses = "natural", escapeSizeHa = 50, minHa = 50,
+         reader = reader), list(...))
+}
+## a reader that counts its calls in a file (it runs in forks), fails for the ELFs in `failFor`
+countingReader <- function(counter, failFor = character(), nullFor = character()) {
+  force(counter)
+  function(elf, hindcastDir, ledgerFile = NULL, nfdbPath, nbacPath, obsCacheDir, years, sets, inputsDir, cores = 1L, fireCauses, escapeSizeHa, minHa, covariateDir) {
+    cat(elf, "\n", file = counter, append = TRUE, sep = "")
+    if (elf %in% failFor) stop("boom in ", elf)
+    if (elf %in% nullFor) return(NULL)
+    list(elf = elf, value = readLines(file.path(hindcastDir, elf, "1986", "1", "hindcast_reps.csv"))[2])
+  }
+}
+mkFakeSet <- function(root, elf, y = 1986, s = 1) {
+  d <- file.path(root, "hindcast", elf, y, s); dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  for (f in c("hindcast_reps.csv", "hindcast_sizes.csv", "hindcast_observed.csv", "hindcast_observedSizes.csv")) writeLines(c("a", "1"), file.path(d, f))
+}
+
+test_that("readHindcastELFs reads an ELF once; a changed hindcast file re-reads only that ELF", {
+  skip_if_not_installed("reproducible")
+  root <- withr::local_tempdir(); counter <- file.path(root, "n.txt")
+  for (e in c("1.1", "2.2")) mkFakeSet(root, e)
+  rd <- countingReader(counter)
+  a <- do.call(readHindcastELFs, elfReadArgs(root, c("1.1", "2.2"), rd))
+  expect_equal(sort(readLines(counter)), c("1.1", "2.2"))
+  b <- do.call(readHindcastELFs, elfReadArgs(root, c("1.1", "2.2"), rd))
+  expect_equal(length(readLines(counter)), 2L)                     # the second call read nothing
+  expect_identical(a, b)
+  writeLines(c("a", "99"), file.path(root, "hindcast", "2.2", "1986", "1", "hindcast_reps.csv"))
+  d <- do.call(readHindcastELFs, elfReadArgs(root, c("1.1", "2.2"), rd))
+  expect_equal(sort(readLines(counter)), c("1.1", "2.2", "2.2"))   # only 2.2 again
+  expect_equal(d[[2]]$value, "99"); expect_equal(d[[1]], a[[1]])
+})
+
+test_that("readHindcastELFs stops naming the ELF whose read failed or returned nothing, never drops it", {
+  skip_if_not_installed("reproducible")
+  root <- withr::local_tempdir(); counter <- file.path(root, "n.txt")
+  for (e in c("1.1", "2.2", "3.3")) mkFakeSet(root, e)
+  expect_error(suppressWarnings(do.call(readHindcastELFs, elfReadArgs(root, c("1.1", "2.2", "3.3"), countingReader(counter, failFor = "2.2"), nCores = 2L))),   # mclapply warns of the failed fork
+               "2\\.2: .*boom in 2\\.2")
+  expect_error(do.call(readHindcastELFs, elfReadArgs(root, c("1.1", "3.3"), countingReader(counter, nullFor = "3.3"), elfCacheDir = file.path(root, "elfs2"))),
+               "3\\.3: returned NULL")
+  ok <- do.call(readHindcastELFs, elfReadArgs(root, c("1.1", "2.2", "3.3"), countingReader(counter)))   # a failed read was not cached
+  expect_length(ok, 3L)
+})
