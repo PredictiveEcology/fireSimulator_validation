@@ -198,3 +198,52 @@ readFireSenseHindcast <- function(elf, hindcastDir, ledgerFile = NULL, nfdbPath,
   c(list(elf = elf), sim, obs[c("obsYears", "obsSizes", "escapeSizeHa", "fireCauses")], burnRate(core, obs$obsYears),
     list(covariate = readHindcastCovariate(covariateDir, elf, core), fit = fit))
 }
+
+#' The files [readFireSenseHindcast()] reads for one ELF
+#'
+#' The hindcast's csv, burn map and climate files, the ELF's `rtml` raster, the ledger and the NFDB and NBAC shapefiles (with their
+#' sidecar files) of the scored `years` and `sets`. @param elf,hindcastDir,inputsDir,covariateDir,ledgerFile,nfdbPath,nbacPath,years,sets As [readFireSenseHindcast()].
+#' @return Character vector of the files that exist.
+hindcastReadFiles <- function(elf, hindcastDir, inputsDir, covariateDir, ledgerFile, nfdbPath, nbacPath, years, sets) {
+  hc <- function(d) list.files(file.path(d, elf, c("climate", outer(years, sets, file.path))), "^hindcast_.*\\.(csv|tif)$|^[A-Za-z]+_historical_.*\\.tif$", recursive = TRUE, full.names = TRUE)
+  shp <- unlist(lapply(c(nfdbPath, nbacPath), function(f) Sys.glob(paste0(tools::file_path_sans_ext(f), ".*"))))
+  f <- c(hc(hindcastDir), hc(covariateDir), Sys.glob(file.path(inputsDir, elf, c("", "NRV/370/1"), paste0("rtml_", elf, ".tif"))), ledgerFile, shp)
+  sort(unique(f[file.exists(f)]))
+}
+
+## the inner functions readFireSenseHindcast() calls: Cache() sees the body of the function it is given, not of these
+readerCallees <- c("hindcastFinishedYears", "readHindcastSim", "hindcastBurnMap", "hindcastCore", "hindcastFlammable", "observedRecord",
+                   "buildObservedRecord", "readHindcastObserved", "readLedgerRow", "burnRate", "readHindcastCovariate", "fread0")
+
+#' Read every finished ELF's hindcast, each read cached
+#'
+#' [readFireSenseHindcast()] for each ELF of `elfs` in forked workers, in a [reproducible::Cache()] in `elfCacheDir` (as [observedRecord()]):
+#' an ELF is read again only when one of the files it reads ([hindcastReadFiles()]: path, size, modification time), its arguments or
+#' the code of the reader and of the functions it calls ([fireSenseUtils::escapeFireSetDeps()] too) changed.
+#' A read that failed (error, or a worker that died) stops the call, naming the ELFs and the errors; no ELF is left out silently.
+#' @param elfs ELF names. @param hindcastDir,inputsDir,covariateDir,years,sets,fireCauses,escapeSizeHa,minHa,obsCacheDir As [readFireSenseHindcast()].
+#' @param ledgerSuffix Suffix of the ledger file `fireSenseParams_*<ledgerSuffix>.rds` of each ELF in `inputsDir`.
+#' @param elfCacheDir Cache folder of the ELF reads. @param nCores Forked workers. @param reader The function that reads one ELF.
+#' @return List of [readFireSenseHindcast()] results, in the order of `elfs`.
+readHindcastELFs <- function(elfs, hindcastDir, years, sets, inputsDir, ledgerSuffix, covariateDir = hindcastDir, obsCacheDir, elfCacheDir,
+                             fireCauses, escapeSizeHa, minHa, nCores = 1L, reader = readFireSenseHindcast) {
+  deps <- c(lapply(readerCallees, get, envir = environment(readFireSenseHindcast)), list(fireSenseUtils::escapeFireSetDeps()))
+  res <- parallel::mclapply(stats::setNames(elfs, elfs), mc.cores = nCores, mc.preschedule = FALSE, function(e) {
+    ledger <- Sys.glob(file.path(inputsDir, e, paste0("fireSenseParams_*", ledgerSuffix, ".rds")))[1]
+    nfdb <- tail(Sys.glob(file.path(inputsDir, e, "NFDB_point_*.shp")), 1); nbac <- tail(Sys.glob(file.path(inputsDir, e, "NBAC_merged_*.shp")), 1)
+    f <- hindcastReadFiles(e, hindcastDir, inputsDir, covariateDir, ledger, nfdb, nbac, years, sets)
+    stamp <- file.info(f)[, c("size", "mtime")]; stamp$mtime <- as.numeric(stamp$mtime)
+    rownames(stamp) <- sub(paste0("^(", paste(unique(c(hindcastDir, inputsDir, covariateDir)), collapse = "|"), ")/?"), "", f)   # the key holds no absolute path
+    asPath <- reproducible::asPath                      # a path in the key is its last element only, so the key is the same wherever the folders are
+    reproducible::Cache(reader, e, asPath(hindcastDir), years = years, sets = sets, inputsDir = asPath(inputsDir), covariateDir = asPath(covariateDir),
+                        ledgerFile = asPath(ledger), nfdbPath = asPath(nfdb), nbacPath = asPath(nbac), obsCacheDir = obsCacheDir, fireCauses = fireCauses, escapeSizeHa = escapeSizeHa, minHa = minHa,
+                        omitArgs = "obsCacheDir", .cacheExtra = list(files = stamp, callees = deps), cachePath = elfCacheDir)
+  })
+  res <- lapply(res, function(x) { attr(x, ".Cache") <- NULL; x })     # Cache() marks a result as new or loaded; Cache() returns a NULL result as the string "NULL"
+  bad <- vapply(res, function(x) !is.list(x), TRUE)
+  if (any(bad))
+    stop("failed to read the hindcast of ", sum(bad), " of ", length(res), " ELFs, which would be left out of the score:\n",
+         paste(names(res)[bad], vapply(res[bad], function(x) if (!inherits(x, "try-error")) "returned NULL (worker died, or no finished year)" else trimws(as.character(x)), ""),
+               sep = ": ", collapse = "\n"))
+  unname(res)
+}

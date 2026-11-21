@@ -13,7 +13,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list(),
   documentation = list("README.md"),
-  reqdPkgs = list("data.table", "MASS", "withr", "ggplot2", "patchwork", "scales", "jsonlite", "terra",
+  reqdPkgs = list("data.table", "reproducible", "MASS", "withr", "ggplot2", "patchwork", "scales", "jsonlite", "terra",
                   "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9047)", # 9037: reads `.neverCache`; 9047: defineParameter(cacheKey = FALSE)
                   "FOR-CAST/fireregimetools@main (>= 0.1.0.9001)", "PredictiveEcology/fireSenseUtils@development (>= 0.2.3.9158)"),
   parameters = bindrows(
@@ -100,20 +100,17 @@ scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
 
 .inputObjects <- function(sim) {
   fireSenseUtils::escapeDefinitionOf(sim)     # stops if another module has another escapeSizeHa or fireCauses
-  ## fireSense hindcasts: every ELF that has finished all its years; the observed records are cached in <outputPath>/obs
+  ## fireSense hindcasts: every ELF that has finished all its years; each ELF's read is cached in <outputPath>/elfs, the observed records in <outputPath>/obs
   if (P(sim)$mode == "score" && !suppliedElsewhere("validationELFs", sim) && !is.na(P(sim)$hindcastPath)) {
     hc <- P(sim)$hindcastPath; yrs <- P(sim)$hindcastYears; sets <- P(sim)$hindcastSets; inp <- P(sim)$inputsPath
     obsDir <- file.path(outputPath(sim), "obs"); dir.create(obsDir, recursive = TRUE, showWarnings = FALSE)
+    elfDir <- file.path(outputPath(sim), "elfs"); dir.create(elfDir, recursive = TRUE, showWarnings = FALSE)
     done <- Filter(function(e) length(hindcastFinishedYears(hc, e, yrs, sets)) == length(yrs),
                    setdiff(list.files(hc), P(sim)$skipELFs))
-    elfs <- parallel::mclapply(done, mc.cores = P(sim)$nCores, mc.preschedule = FALSE, function(e)
-      readFireSenseHindcast(e, hc, years = yrs, sets = sets, inputsDir = inp, covariateDir = if (is.na(P(sim)$covariatePath)) hc else P(sim)$covariatePath,
-                            ledgerFile = Sys.glob(file.path(inp, e, paste0("fireSenseParams_*", P(sim)$ledgerSuffix, ".rds")))[1],
-                            nfdbPath = tail(Sys.glob(file.path(inp, e, "NFDB_point_*.shp")), 1),
-                            nbacPath = tail(Sys.glob(file.path(inp, e, "NBAC_merged_*.shp")), 1),
-                            obsCacheDir = obsDir, fireCauses = P(sim)$fireCauses,
-                            escapeSizeHa = P(sim)$escapeSizeHa, minHa = scoredMinHa(P(sim))))
-    sim$validationELFs <- Filter(Negate(is.null), elfs)
+    sim$validationELFs <- readHindcastELFs(done, hc, years = yrs, sets = sets, inputsDir = inp, ledgerSuffix = P(sim)$ledgerSuffix,
+                                           covariateDir = if (is.na(P(sim)$covariatePath)) hc else P(sim)$covariatePath,
+                                           obsCacheDir = obsDir, elfCacheDir = elfDir, fireCauses = P(sim)$fireCauses,
+                                           escapeSizeHa = P(sim)$escapeSizeHa, minHa = scoredMinHa(P(sim)), nCores = P(sim)$nCores)
     if (!length(sim$validationELFs))
       stop("no finished hindcasts in ", hc, ": no ELF has every one of hindcastYears ", min(yrs), "-", max(yrs), " in hindcastSets ", paste(sets, collapse = ", "),
            if (length(P(sim)$skipELFs)) paste0(" (skipELFs: ", paste(P(sim)$skipELFs, collapse = ", "), ")"))
