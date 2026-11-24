@@ -78,6 +78,7 @@ td a:hover { text-decoration: underline; }
   <nav id="nav" aria-label="Sections">
     <a href="#scores">Scores</a>
     <a href="#bias">Bias</a>
+    <a href="#climate">Climate response</a>
     <a href="#rank">Observed rank</a>
     <a href="#overview">Overview</a>
     <span class="grp">By metric</span>
@@ -134,6 +135,23 @@ td a:hover { text-decoration: underline; }
       <p class="note">Ratio of the median run to the observed record over the scored years; 1 is no bias. The mean columns are the same ratio for the mean over runs (what compounds over a long run; the median is the robust centre). The mean columns have no observed rank. Small numbers: the 95% range of single runs (the "all" row: the range over ELFs); "obs N%": the share of runs below the observed record. Per 1000 yr: how far the median run's total drifts from the observed rate over 1000 years (simulated minus observed; the totals only). "all: median of ELFs" treats every ELF alike; "all: ratio of sums" is dominated by the large ELFs.</p>
     </section>
 
+    <section id="climate">
+      <h2>Climate response <small>does annual area respond to climate as observed does? click a column to sort</small></h2>
+      <div class="tablebox">
+        <table>
+          <thead><tr>
+            <th><button type="button" data-c="elf">ELF</button></th>
+            <th><button type="button" data-c="slope">Slope of log area on climate</button></th>
+            <th><button type="button" data-c="dry10">Driest 10% of years</button></th>
+            <th><button type="button" data-c="wetHalf">Wetter half of years</button></th>
+            <th><button type="button" data-c="obsSlope">Observed slope</button></th>
+          </tr></thead>
+          <tbody id="climateRows"></tbody>
+        </table>
+      </div>
+      <p class="note">Simulated over observed, over the scored years; 1 is the observed response. Slope: of log annual area burned on the year's climate covariate (standardised; higher is drier). Driest 10%: area in the years at or above the 90% quantile of the covariate. Wetter half: area in the years at or below its median. Each ratio is the median of the runs; small numbers are the 95% range of single runs (the "all" row: the range over ELFs).</p>
+    </section>
+
     <section id="rank">
       <h2>Observed rank <small>is the observed record a plausible draw from the runs?</small></h2>
       <div class="rankbox"><svg id="rankSvg" role="img" aria-label="Share of runs the observed record is above, per ELF and metric"></svg></div>
@@ -169,6 +187,7 @@ td a:hover { text-decoration: underline; }
 const IMG = /*IMG*/{};
 const ROWS = /*ROWS*/[];
 const BIAS = /*BIAS*/[];
+const CLIMATE = /*CLIMATE*/[];
 const METRICS = [
   ["areaByYear", "Area by year"], ["annualArea", "Annual area"], ["fireSizes", "Fire sizes"],
   ["ignitions", "Ignitions"], ["escapes", "Escapes"]];
@@ -267,6 +286,20 @@ function renderBias() {
 }
 const markBias = bindSort("b", biasSort, renderBias);
 if (BIAS.length) renderBias(); else document.getElementById("bias").hidden = true;
+
+// Climate-response table: the same cells (ratioCell), each with data-v
+const climSort = { k: "elf", d: 1 };
+function renderClimate() {
+  const v = r => Array.isArray(r[climSort.k]) ? r[climSort.k][0] : r[climSort.k];
+  document.getElementById("climateRows").innerHTML = sortRows(CLIMATE, climSort.k, climSort.d, v, r => /^all/.test(r.elf)).map(r => {
+    const cells = ["slope", "dry10", "wetHalf"].map(k => ratioCell(r[k], r.elf, k)).join("");
+    const o = `<td data-v="${r.obsSlope ?? ""}"><span class="v">${r.obsSlope ?? ""}</span></td>`;
+    return `<tr><td data-v="${r.elf}">${/^all/.test(r.elf) ? r.elf : `<a href="#${slug(r.elf)}">${r.elf}</a>`}</td>${cells}${o}</tr>`;
+  }).join("");
+  markClimate();
+}
+const markClimate = bindSort("c", climSort, renderClimate);
+if (CLIMATE.length) renderClimate(); else document.getElementById("climate").hidden = true;
 
 function setMetric(m) {
   metric = m; const src = IMG["metric_" + m];
