@@ -92,6 +92,8 @@ defineModule(sim, list(
   ),
   outputObjects = bindrows(
     createsOutput("anovaResults", "list", "Mode 'anova': `terms` (per metric and term: df, pctSS, dropOnePctSS, F, p, note), `cells` and `long`, from runAnova(); the first two are also written to <outputPath>/anova_terms.csv and anova_cells.csv."),
+    createsOutput("weightsResults", "list", "Mode 'weights': `report`, `tuning` and `losses`, from tuneWeights(); also written to <outputPath>/weights_report.csv, weights_tuning.csv and weights_losses.csv."),
+    createsOutput("bySetResults", "data.frame", "Mode 'score' with bySet: scoreBySet() of every ELF, written to <outputPath>/wave1_bySet.csv. NULL otherwise."),
     createsOutput("validationResults", "list", "runWave1() result: results, gates, bias, perELF, flagged. Also saved to <outputPath>/wave1.rds, its results table to wave1_results.csv, and the page to validation.html.")
   )
 ))
@@ -122,23 +124,28 @@ scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
 
 doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
   switch(eventType,
-    init = if (P(sim)$mode == "anova") {
+    init = {
       p <- P(sim)
-      sim$anovaResults <- runAnova(p$anovaScores, p$anovaFactors, if (!anyNA(p$anovaMetrics)) p$anovaMetrics, outDir = outputPath(sim))
-      Plots(data = sim$anovaResults$terms, fn = plotAnova, filename = "anova", ggsaveArgs = anovaSize)
-    } else if (P(sim)$mode == "weights") {
-      p <- P(sim); out <- outputPath(sim)
-      orNULL <- function(x) if (length(x)) x
-      runWeights(p$weightsTerms, if (is.na(p$weightsBySet)) file.path(out, "wave1_bySet.csv") else p$weightsBySet, p$weightsGrid, outDir = out,
-                 tuneBySetFile = p$weightsTuneBySet, tuneELFs = orNULL(p$weightsTuneELFs), reportELFs = orNULL(p$weightsReportELFs),
-                 leaveOneOut = p$weightsLeaveOneOut, loss = p$weightsLoss)
-    } else {
-      sim$validationResults <- runWave1(sim$validationELFs, minHa = scoredMinHa(P(sim)), nBoot = P(sim)$nBoot, nNull = P(sim)$nNull,
-                                        nPerm = P(sim)$nPerm, seed = P(sim)$seed)
-      ## the files are written by `writeOutputs`, not here: a cached init restores only validationResults
+      ## init only computes; the files are written by `writeOutputs`, because a cached init restores only the declared outputs
+      if (p$mode == "anova") {
+        sim$anovaResults <- computeAnova(p$anovaScores, p$anovaFactors, if (!anyNA(p$anovaMetrics)) p$anovaMetrics)
+      } else if (p$mode == "weights") {
+        orNULL <- function(x) if (length(x)) x
+        sim$weightsResults <- computeWeights(p$weightsTerms, if (is.na(p$weightsBySet)) file.path(outputPath(sim), "wave1_bySet.csv") else p$weightsBySet,
+                                             p$weightsGrid, tuneBySetFile = p$weightsTuneBySet, tuneELFs = orNULL(p$weightsTuneELFs),
+                                             reportELFs = orNULL(p$weightsReportELFs), leaveOneOut = p$weightsLeaveOneOut, loss = p$weightsLoss)
+      } else {
+        sim$validationResults <- runWave1(sim$validationELFs, minHa = scoredMinHa(p), nBoot = p$nBoot, nNull = p$nNull, nPerm = p$nPerm, seed = p$seed)
+        sim$bySetResults <- if (p$bySet) do.call(rbind, lapply(sim$validationELFs, scoreBySet, nBoot = p$nBoot, seed = p$seed))
+      }
       sim <- scheduleEvent(sim, start(sim), "fireSimulator_validation", "writeOutputs", eventPriority = 6)
     },
-    writeOutputs = {
+    writeOutputs = if (P(sim)$mode == "anova") {
+      writeAnova(sim$anovaResults, outputPath(sim))
+      Plots(data = sim$anovaResults$terms, fn = plotAnova, filename = "anova", ggsaveArgs = anovaSize)
+    } else if (P(sim)$mode == "weights") {
+      writeWeights(sim$weightsResults, outputPath(sim))
+    } else {
       summ <- summariseGates(sim$validationResults$gates)
       pl <- stats::setNames(lapply(sim$validationELFs, elfPlots, label = P(sim)$simLabel, minHa = scoredMinHa(P(sim))),
                             vapply(sim$validationELFs, `[[`, "", "elf"))
@@ -152,9 +159,7 @@ doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
       out <- outputPath(sim); dir.create(out, recursive = TRUE, showWarnings = FALSE)
       saveRDS(sim$validationResults, file.path(out, "wave1.rds"))
       utils::write.csv(sim$validationResults$results, file.path(out, "wave1_results.csv"), row.names = FALSE)
-      if (P(sim)$bySet)
-        utils::write.csv(do.call(rbind, lapply(sim$validationELFs, scoreBySet, nBoot = P(sim)$nBoot, seed = P(sim)$seed)),
-                         file.path(out, "wave1_bySet.csv"), row.names = FALSE)
+      if (P(sim)$bySet) utils::write.csv(sim$bySetResults, file.path(out, "wave1_bySet.csv"), row.names = FALSE)
       buildValidationPage(sim$validationELFs, sim$validationResults$gates, file.path(out, "validation.html"),
                           template = file.path(modulePath(sim), currentModule(sim), "pageTemplate.html"),
                           title = P(sim)$pageTitle, subtitle = P(sim)$pageSubtitle, label = P(sim)$simLabel,

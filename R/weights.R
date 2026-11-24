@@ -109,8 +109,19 @@ readTermsFiles <- function(files) {
 #' @param tuneBySetFile Optional `bySet` csv of the tune years. @param ... Passed to [tuneWeights()].
 #' @return The [tuneWeights()] list, invisibly. Written: `weights_report.csv` (the held-out rows: the result), `weights_tuning.csv`, `weights_losses.csv`.
 runWeights <- function(termsFile, bySetFile, gridFile, outDir, tuneBySetFile = NA_character_, ...) {
+  res <- computeWeights(termsFile, bySetFile, gridFile, tuneBySetFile, ...)
+  writeWeights(res, outDir)
+  invisible(res)
+}
+
+## the tables of `runWeights()`, written nowhere
+computeWeights <- function(termsFile, bySetFile, gridFile, tuneBySetFile = NA_character_, ...) {
   rd <- function(f) utils::read.csv(f, check.names = FALSE)
-  res <- tuneWeights(readTermsFiles(termsFile), rd(bySetFile), rd(gridFile), tuneBySet = if (!is.na(tuneBySetFile)) rd(tuneBySetFile), ...)
+  tuneWeights(readTermsFiles(termsFile), rd(bySetFile), rd(gridFile), tuneBySet = if (!is.na(tuneBySetFile)) rd(tuneBySetFile), ...)
+}
+
+## weights_report.csv, weights_tuning.csv and weights_losses.csv of a `computeWeights()` result
+writeWeights <- function(res, outDir) {
   dir.create(outDir, recursive = TRUE, showWarnings = FALSE)
   for (n in c("report", "tuning", "losses")) utils::write.csv(res[[n]], file.path(outDir, paste0("weights_", n, ".csv")), row.names = FALSE)
   invisible(res)

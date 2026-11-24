@@ -73,9 +73,12 @@ test_that("module parameter mode = 'anova' writes both tables and the figure, wi
   mp <- file.path(root, "modules"); dir.create(mp)
   file.symlink(normalizePath(testthat::test_path("..", "..")), file.path(mp, "fireSimulator_validation"))
   withr::local_options(spades.useRequire = FALSE, spades.moduleCodeChecks = FALSE)
-  sim <- SpaDES.core::simInitAndSpades(times = list(start = 0, end = 1), modules = "fireSimulator_validation",
-    params = list(fireSimulator_validation = list(mode = "anova", anovaScores = sc, anovaFactors = file.path(root, "factors.csv"), .plots = "png")),
+  go <- function() SpaDES.core::simInitAndSpades(times = list(start = 0, end = 1), modules = "fireSimulator_validation",
+    params = list(fireSimulator_validation = list(mode = "anova", anovaScores = sc, anovaFactors = file.path(root, "factors.csv"), .plots = "png", .useCache = TRUE)),
     paths = list(modulePath = mp, outputPath = out, inputPath = root, cachePath = file.path(root, "cache"), scratchPath = file.path(root, "scratch")))
+  go()                                                                   # fills the cache
+  unlink(list.files(out, full.names = TRUE), recursive = TRUE)           # an empty outputPath
+  sim <- go()                                                            # init is a cache hit: writeOutputs still writes the tables and the figure
   tm <- read.csv(file.path(out, "anova_terms.csv")); cl <- read.csv(file.path(out, "anova_cells.csv"))
   expect_named(tm, c("metric", "term", "df", "pctSS", "dropOnePctSS", "F", "p", "note"))
   expect_gt(tm$pctSS[tm$term == "A"], 80)

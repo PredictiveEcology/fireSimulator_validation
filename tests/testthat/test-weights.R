@@ -76,10 +76,14 @@ test_that("module parameter mode = 'weights' reads the files and writes the tabl
   mp <- file.path(root, "modules"); dir.create(mp)
   file.symlink(normalizePath(testthat::test_path("..", "..")), file.path(mp, "fireSimulator_validation"))
   withr::local_options(spades.useRequire = FALSE, spades.moduleCodeChecks = FALSE)
-  SpaDES.core::simInitAndSpades(times = list(start = 0, end = 1), modules = "fireSimulator_validation",
+  go <- function() SpaDES.core::simInitAndSpades(times = list(start = 0, end = 1), modules = "fireSimulator_validation",
     params = list(fireSimulator_validation = list(mode = "weights", weightsTerms = file.path(root, "terms.csv"), weightsGrid = file.path(root, "grid.csv"),
-                                                  weightsTuneELFs = c("a", "b"), weightsReportELFs = "c", .plots = NA)),
+                                                  weightsTuneELFs = c("a", "b"), weightsReportELFs = "c", .plots = NA, .useCache = TRUE)),
     paths = list(modulePath = mp, outputPath = out, inputPath = root, cachePath = file.path(root, "cache"), scratchPath = file.path(root, "scratch")))
+  go()                                                                   # fills the cache
+  unlink(file.path(out, c("weights_report.csv", "weights_tuning.csv", "weights_losses.csv")))
+  go()                                                                   # init is a cache hit: writeOutputs still writes the tables
+  expect_true(all(file.exists(file.path(out, c("weights_report.csv", "weights_tuning.csv", "weights_losses.csv")))))
   expect_equal(read.csv(file.path(out, "weights_report.csv"))$member, 8L)
   expect_false(file.exists(file.path(out, "wave1.rds")))
 })

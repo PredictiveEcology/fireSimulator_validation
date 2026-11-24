@@ -105,11 +105,22 @@ plotAnova <- function(terms, baseSize = 15) {
 #' @param scores,factors,metrics See [readAnovaScores()]. @param outDir Folder of the two csv files.
 #' @return List: `terms` (`metric`, then [anovaTerms()]), `cells` ([anovaCells()]), `long` (the values analysed), invisibly. Written: `anova_terms.csv`, `anova_cells.csv`.
 runAnova <- function(scores, factors, metrics = NULL, outDir) {
+  res <- computeAnova(scores, factors, metrics)
+  writeAnova(res, outDir)
+  invisible(res)
+}
+
+## the terms, cells and long scores of `runAnova()`, written nowhere
+computeAnova <- function(scores, factors, metrics = NULL) {
   long <- readAnovaScores(scores, factors, metrics)
   fac <- setdiff(names(long), c("arm", "ELF", "metric", "value"))
   terms <- do.call(rbind, lapply(unique(long$metric), function(m) cbind(metric = m, anovaTerms(long[long$metric == m, ], fac))))
   rownames(terms) <- NULL
-  res <- list(terms = terms, cells = anovaCells(long, fac), long = long)
+  list(terms = terms, cells = anovaCells(long, fac), long = long)
+}
+
+## anova_terms.csv and anova_cells.csv of a `computeAnova()` result
+writeAnova <- function(res, outDir) {
   dir.create(outDir, recursive = TRUE, showWarnings = FALSE)
   utils::write.csv(res$terms, file.path(outDir, "anova_terms.csv"), row.names = FALSE)
   utils::write.csv(res$cells, file.path(outDir, "anova_cells.csv"), row.names = FALSE)
