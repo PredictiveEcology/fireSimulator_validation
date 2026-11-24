@@ -63,7 +63,9 @@ test_that("the module file hands its input to the runner and nothing else", {
   exprs <- parse(testthat::test_path("..", "..", "fireSimulator_validation.R"), keep.source = FALSE)
   txt <- paste(deparse(exprs[[length(exprs)]]), collapse = " ")
   expect_match(txt, "runWave1\\(sim\\$validationELFs")
-  expect_false(grepl("scheduleEvent", paste(vapply(exprs, function(e) paste(deparse(e), collapse = " "), ""), collapse = " ")))
+  all <- paste(vapply(exprs, function(e) paste(deparse(e), collapse = " "), ""), collapse = " ")
+  expect_equal(lengths(regmatches(all, gregexpr("scheduleEvent", all))), 1L)              # one event only: writeOutputs, which writes what a cached init does not restore
+  expect_match(all, "scheduleEvent\\(sim, start\\(sim\\), \"fireSimulator_validation\",\\s+\"writeOutputs\"")
 })
 
 test_that("observedRecord counts observed area on the burnable core, without a flammableRTM warning", {

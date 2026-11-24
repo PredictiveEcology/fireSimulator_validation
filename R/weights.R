@@ -102,15 +102,21 @@ readTermsFiles <- function(files) {
   }))
 }
 
-#' Read the three tables of weight tuning, run [tuneWeights()] and write its tables
+#' Read the tables of weight tuning
 #'
 #' @param termsFile One or several terms files ([readTermsFiles()]: one per ELF as `fireSense_spreadFit` writes them, or one table with an `ELF` column).
-#' @param bySetFile `wave1_bySet.csv`. @param gridFile Weight grid, csv, one row per vector. @param outDir Folder of the three result csv files.
-#' @param tuneBySetFile Optional `bySet` csv of the tune years. @param ... Passed to [tuneWeights()].
-#' @return The [tuneWeights()] list, invisibly. Written: `weights_report.csv` (the held-out rows: the result), `weights_tuning.csv`, `weights_losses.csv`.
-runWeights <- function(termsFile, bySetFile, gridFile, outDir, tuneBySetFile = NA_character_, ...) {
+#' @param bySetFile `wave1_bySet.csv`. @param gridFile Weight grid, csv, one row per vector. @param tuneBySetFile Optional `bySet` csv of the tune years (NA: none).
+#' @return List `terms`, `bySet`, `grid`, `tuneBySet` (NULL when not given), the arguments of [tuneWeights()].
+readWeightsTables <- function(termsFile, bySetFile, gridFile, tuneBySetFile = NA_character_) {
   rd <- function(f) utils::read.csv(f, check.names = FALSE)
-  res <- tuneWeights(readTermsFiles(termsFile), rd(bySetFile), rd(gridFile), tuneBySet = if (!is.na(tuneBySetFile)) rd(tuneBySetFile), ...)
+  list(terms = readTermsFiles(termsFile), bySet = rd(bySetFile), grid = rd(gridFile), tuneBySet = if (!is.na(tuneBySetFile)) rd(tuneBySetFile))
+}
+
+#' Write the three tables of [tuneWeights()]
+#'
+#' @param res A [tuneWeights()] list. @param outDir Folder of the three result csv files.
+#' @return `res`, invisibly. Written: `weights_report.csv` (the held-out rows: the result), `weights_tuning.csv`, `weights_losses.csv`.
+writeWeights <- function(res, outDir) {
   dir.create(outDir, recursive = TRUE, showWarnings = FALSE)
   for (n in c("report", "tuning", "losses")) utils::write.csv(res[[n]], file.path(outDir, paste0("weights_", n, ".csv")), row.names = FALSE)
   invisible(res)

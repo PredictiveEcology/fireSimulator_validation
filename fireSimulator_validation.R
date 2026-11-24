@@ -21,7 +21,8 @@ defineModule(sim, list(
     defineParameter("nNull", "integer", 199L, 1L, NA, "Draws per year of the Anderson-Darling null."),
     defineParameter("nPerm", "integer", 9999L, 1L, NA, "Permutations of the ranking floor."),
     defineParameter("seed", "integer", 1L, NA, NA, "Seed of the bootstrap and permutations."),
-    defineParameter("simLabel", "character", "simulated", NA, NA, "Name of the simulated series in the figures."),
+    defineParameter("simLabel", "character", "simulated", NA, NA, "Name of the simulated series in the figures.",
+                    cacheKey = FALSE), # used only by writeOutputs
     defineParameter("escapeSizeHa", "numeric", fireSenseUtils::fireSenseEscapeSizeHa, 0, NA,
                     paste("Smallest whole fire polygon (ha) that is an escape: the escape definition of the fit and the hindcast, recorded as a property of",
                           "the observed record. Checked against `escapeSizeHa` of the other modules.")),
@@ -30,11 +31,14 @@ defineModule(sim, list(
                           "recorded as a property of the observed record. Checked against `fireCauses` of the other modules.")),
     defineParameter("minHa", "numeric", NA_real_, 0, NA,
                     "Smallest fire (ha) scored and drawn: escapes, area and sizes of the simulated and observed series. NA: `escapeSizeHa`."),
-    defineParameter(".neverCache", "character", ".inputObjects", NA, NA,
+    defineParameter(".neverCache", "character", c(".inputObjects", "writeOutputs"), NA, NA,
                     paste("Events that are never cached, whatever `.useCache` says (read by SpaDES.core, 3.2.1.9037 or later):",
-                          "`.inputObjects` reads the hindcast files on disk, which the cache key does not hold, so a cached one returns the ELFs of an earlier, unfinished hindcast.")),
-    defineParameter(".plots", "character", "screen", NA, NA, "Where the figures go, as for SpaDES.core::Plots(): 'screen', 'png', both, or NA for none."),
-    defineParameter(".plotInitialTime", "numeric", 1, NA, NA, "When the figures are drawn on screen; NA for never."),
+                          "`.inputObjects` reads the hindcast files on disk, which the cache key does not hold, so a cached one returns the ELFs of an earlier, unfinished hindcast.",
+                          "`writeOutputs` writes the figures, wave1 files and validation.html from `validationResults`, which a cached `init` restores without them.")),
+    defineParameter(".plots", "character", "screen", NA, NA, "Where the figures go, as for SpaDES.core::Plots(): 'screen', 'png', both, or NA for none.",
+                    cacheKey = FALSE), # used only by writeOutputs
+    defineParameter(".plotInitialTime", "numeric", 1, NA, NA, "When the figures are drawn on screen; NA for never.",
+                    cacheKey = FALSE), # used only by writeOutputs
     ## the fireSense reader: used only when validationELFs is not supplied
     defineParameter("hindcastPath", "character", NA_character_, NA, NA,
                     "FireSense hindcast outputs, <hindcastPath>/<ELF>/<year>/<set>/. When set and validationELFs is not supplied, every ELF there that has finished all hindcastYears is read with readFireSenseHindcast().",
@@ -50,22 +54,27 @@ defineModule(sim, list(
     defineParameter("mode", "character", "score", NA, NA,
                     paste("'score': score the hindcast (the default). 'weights': tune objective weights from `weightsTerms`, `weightsBySet` and `weightsGrid` (`tuneWeights()`):",
                           "no hindcast is read; the tables `weights_report.csv` (the held-out ELFs' rows: the result), `weights_tuning.csv` (tune ELFs, labelled) and `weights_losses.csv` go to outputPath.",
-                          "'anova': partition the variation of the per-ELF skill scores of several arms among ELF, the arms' factors and their interactions, from `anovaScores`, `anovaFactors` and `anovaMetrics` (`runAnova()`):",
+                          "'anova': partition the variation of the per-ELF skill scores of several arms among ELF, the arms' factors and their interactions, from `anovaScores`, `anovaFactors` and `anovaMetrics` (`computeAnova()`):",
                           "no hindcast is read; `anova_terms.csv` and `anova_cells.csv` go to outputPath, with one figure.")),
     defineParameter("anovaScores", "character", NA_character_, NA, NA,
                     paste("Mode 'anova': score folders (outputPath of mode 'score': wave1_results.csv), one arm each. The arm is the name in this vector, else the folder's basename;",
-                          "folders with one arm name are combined (the ELFs of one arm scored in several folders).")),
+                          "folders with one arm name are combined (the ELFs of one arm scored in several folders)."),
+                    cacheKey = FALSE), # only .inputObjects (never cached) reads the files; what it read is in init's key
     defineParameter("anovaFactors", "ANY", NA_character_, NA, NA,
-                    "Mode 'anova': csv path or data.frame, column `arm` (as named by `anovaScores`) and one column per factor."),
+                    "Mode 'anova': csv path or data.frame, column `arm` (as named by `anovaScores`) and one column per factor.",
+                    cacheKey = FALSE), # only .inputObjects (never cached) reads the files; what it read is in init's key
     defineParameter("anovaMetrics", "character", NA_character_, NA, NA,
                     "Mode 'anova': per-ELF skill metrics analysed, `<test>_<null>_skill` (e.g. S1_N1_skill, S3_N1_skill, S4largest_N1_skill). NA: every `*_N1_skill` in the scores."),
     defineParameter("weightsTerms", "character", NA_character_, NA, NA,
                     paste("Mode 'weights': csv files of raw objective terms, one per ELF as fireSense_spreadFit writes them (`spreadFitTerms_<runName>.csv`: `member`, `rep`, parameters, terms; the ELF is read from the file name (the one token like `4.3` or `6.6.2`; an ambiguous name must be given by naming the file with its ELF in this vector)),",
-                          "or one file with an `ELF` column. `member` must be the `paramSet` of the bySet scores; replicates (`rep`) are reduced to their median.")),
+                          "or one file with an `ELF` column. `member` must be the `paramSet` of the bySet scores; replicates (`rep`) are reduced to their median."),
+                    cacheKey = FALSE), # only .inputObjects (never cached) reads the files; what it read is in init's key
     defineParameter("weightsBySet", "character", NA_character_, NA, NA,
-                    "Mode 'weights': the bySet scores of the same members (`wave1_bySet.csv`); the report rows come from it. NA: wave1_bySet.csv in outputPath."),
+                    "Mode 'weights': the bySet scores of the same members (`wave1_bySet.csv`); the report rows come from it. NA: wave1_bySet.csv in outputPath.",
+                    cacheKey = FALSE), # only .inputObjects (never cached) reads the files; what it read is in init's key
     defineParameter("weightsGrid", "character", NA_character_, NA, NA,
-                    "Mode 'weights': csv of weight vectors fixed in advance, at most 50 rows, one column per objective term weighted (term names, not parameters; optional `weightId`)."),
+                    "Mode 'weights': csv of weight vectors fixed in advance, at most 50 rows, one column per objective term weighted (term names, not parameters; optional `weightId`).",
+                    cacheKey = FALSE), # only .inputObjects (never cached) reads the files; what it read is in init's key
     defineParameter("weightsTuneELFs", "character", character(0), NA, NA, "Mode 'weights': ELFs the weights are selected on. Empty: every ELF of the terms that is not reported."),
     defineParameter("weightsReportELFs", "character", character(0), NA, NA,
                     "Mode 'weights': ELFs the result is reported on, none of them tuned on. Empty is allowed only with `weightsLeaveOneOut` (then the tune ELFs)."),
@@ -73,7 +82,8 @@ defineModule(sim, list(
     defineParameter("weightsLoss", "character", "area_ratio", NA, NA,
                     "Mode 'weights': bySet column the weights are selected on, as the median over the tune ELFs: distance from 1 (log scale) for a `_ratio` column, else maximised."),
     defineParameter("weightsTuneBySet", "character", NA_character_, NA, NA,
-                    "Mode 'weights': bySet scores of other years to select on (to tune and report on the same ELFs). NA: `weightsBySet`."),
+                    "Mode 'weights': bySet scores of other years to select on (to tune and report on the same ELFs). NA: `weightsBySet`.",
+                    cacheKey = FALSE), # only .inputObjects (never cached) reads the files; what it read is in init's key
     defineParameter("skipELFs", "character", character(0), NA, NA, "ELFs of hindcastPath left out."),
     defineParameter("inputsPath", "character", NA_character_, NA, NA,
                     "Folder of the ELF input folders: <inputsPath>/<ELF>/ has rtml_<ELF>.tif, the spread-fit ledger fireSenseParams_*<ledgerSuffix>.rds and the NFDB_point_*.shp and NBAC_merged_*.shp observations (the latest of each).",
@@ -81,16 +91,25 @@ defineModule(sim, list(
     defineParameter("ledgerSuffix", "character", "", NA, NA, "Suffix of the spread-fit ledger, e.g. '_crpsCauseAnnD03WholeLong_20261108'."),
     defineParameter("nCores", "integer", 1L, 1L, NA, "ELFs read at once (forked).", cacheKey = FALSE), # how many read at once, not what is read
     ## the page: <outputPath>/validation.html, beside wave1.rds and wave1_results.csv
-    defineParameter("pageTitle", "character", "Hindcast validation", NA, NA, "Title of validation.html."),
-    defineParameter("pageSubtitle", "character", "", NA, NA, "Subtitle of validation.html."),
-    defineParameter("pageDpi", "numeric", 50, 1, NA, "Resolution of the page's figures.")
+    defineParameter("pageTitle", "character", "Hindcast validation", NA, NA, "Title of validation.html.",
+                    cacheKey = FALSE), # used only by writeOutputs
+    defineParameter("pageSubtitle", "character", "", NA, NA, "Subtitle of validation.html.",
+                    cacheKey = FALSE), # used only by writeOutputs
+    defineParameter("pageDpi", "numeric", 50, 1, NA, "Resolution of the page's figures.",
+                    cacheKey = FALSE) # used only by writeOutputs
   ),
   inputObjects = bindrows(
     expectsInput("validationELFs", "list",
-                 "One plain list per ELF: elf, simYears, simSizes, obsYears, obsSizes, covariate, fit (see runWave1()). A simulator-specific reader builds them; for fireSense, readFireSenseHindcast().")
+                 "One plain list per ELF: elf, simYears, simSizes, obsYears, obsSizes, covariate, fit (see runWave1()). A simulator-specific reader builds them; for fireSense, readFireSenseHindcast()."),
+    expectsInput("anovaLong", "data.frame",
+                 "Mode 'anova': the scores of the arms with their factors, readAnovaScores() of `anovaScores`, `anovaFactors` and `anovaMetrics`; read by .inputObjects, so that the file content is in init's cache key."),
+    expectsInput("weightsTables", "list",
+                 "Mode 'weights': `terms`, `bySet`, `grid` and `tuneBySet` (NULL when not given), read by .inputObjects from `weightsTerms`, `weightsBySet`, `weightsGrid` and `weightsTuneBySet`, so that the file content is in init's cache key.")
   ),
   outputObjects = bindrows(
-    createsOutput("anovaResults", "list", "Mode 'anova': `terms` (per metric and term: df, pctSS, dropOnePctSS, F, p, note), `cells` and `long`, from runAnova(); the first two are also written to <outputPath>/anova_terms.csv and anova_cells.csv."),
+    createsOutput("anovaResults", "list", "Mode 'anova': `terms` (per metric and term: df, pctSS, dropOnePctSS, F, p, note), `cells` and `long`, from computeAnova(); the first two are also written to <outputPath>/anova_terms.csv and anova_cells.csv."),
+    createsOutput("weightsResults", "list", "Mode 'weights': `report`, `tuning` and `losses`, from tuneWeights(); also written to <outputPath>/weights_report.csv, weights_tuning.csv and weights_losses.csv."),
+    createsOutput("bySetResults", "data.frame", "Mode 'score' with bySet: scoreBySet() of every ELF, written to <outputPath>/wave1_bySet.csv. NULL otherwise."),
     createsOutput("validationResults", "list", "runWave1() result: results, gates, bias, perELF, flagged. Also saved to <outputPath>/wave1.rds, its results table to wave1_results.csv, and the page to validation.html.")
   )
 ))
@@ -116,40 +135,59 @@ scoredMinHa <- function(p) if (is.na(p$minHa)) p$escapeSizeHa else p$minHa
            if (length(P(sim)$skipELFs)) paste0(" (skipELFs: ", paste(P(sim)$skipELFs, collapse = ", "), ")"))
     message("scoring ", length(sim$validationELFs), " ELFs")
   }
+  if (P(sim)$mode == "anova" && !suppliedElsewhere("anovaLong", sim)) {
+    p <- P(sim)
+    sim$anovaLong <- readAnovaScores(p$anovaScores, p$anovaFactors, if (!anyNA(p$anovaMetrics)) p$anovaMetrics)
+  }
+  if (P(sim)$mode == "weights" && !suppliedElsewhere("weightsTables", sim)) {
+    p <- P(sim)
+    sim$weightsTables <- readWeightsTables(p$weightsTerms, if (is.na(p$weightsBySet)) file.path(outputPath(sim), "wave1_bySet.csv") else p$weightsBySet,
+                                           p$weightsGrid, p$weightsTuneBySet)
+  }
   return(invisible(sim))
 }
 
 doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
   switch(eventType,
-    init = if (P(sim)$mode == "anova") {
+    init = {
       p <- P(sim)
-      sim$anovaResults <- runAnova(p$anovaScores, p$anovaFactors, if (!anyNA(p$anovaMetrics)) p$anovaMetrics, outDir = outputPath(sim))
+      ## init only computes; the files are written by `writeOutputs`, because a cached init restores only the declared outputs
+      if (p$mode == "anova") {
+        sim$anovaResults <- computeAnova(sim$anovaLong)
+      } else if (p$mode == "weights") {
+        orNULL <- function(x) if (length(x)) x
+        w <- sim$weightsTables
+        sim$weightsResults <- tuneWeights(w$terms, w$bySet, w$grid, tuneBySet = w$tuneBySet, tuneELFs = orNULL(p$weightsTuneELFs),
+                                          reportELFs = orNULL(p$weightsReportELFs), leaveOneOut = p$weightsLeaveOneOut, loss = p$weightsLoss)
+      } else {
+        sim$validationResults <- runWave1(sim$validationELFs, minHa = scoredMinHa(p), nBoot = p$nBoot, nNull = p$nNull, nPerm = p$nPerm, seed = p$seed)
+        sim$bySetResults <- if (p$bySet) do.call(rbind, lapply(sim$validationELFs, scoreBySet, nBoot = p$nBoot, seed = p$seed))
+      }
+      params(sim)$fireSimulator_validation$.neverCache <- union(p$.neverCache, "writeOutputs")   # a user's `.neverCache` replaces the default; writeOutputs is never cached
+      sim <- scheduleEvent(sim, start(sim), "fireSimulator_validation", "writeOutputs", eventPriority = 6)
+    },
+    writeOutputs = if (P(sim)$mode == "anova") {
+      writeAnova(sim$anovaResults, outputPath(sim))
       Plots(data = sim$anovaResults$terms, fn = plotAnova, filename = "anova", ggsaveArgs = anovaSize)
     } else if (P(sim)$mode == "weights") {
-      p <- P(sim); out <- outputPath(sim)
-      orNULL <- function(x) if (length(x)) x
-      runWeights(p$weightsTerms, if (is.na(p$weightsBySet)) file.path(out, "wave1_bySet.csv") else p$weightsBySet, p$weightsGrid, outDir = out,
-                 tuneBySetFile = p$weightsTuneBySet, tuneELFs = orNULL(p$weightsTuneELFs), reportELFs = orNULL(p$weightsReportELFs),
-                 leaveOneOut = p$weightsLeaveOneOut, loss = p$weightsLoss)
+      writeWeights(sim$weightsResults, outputPath(sim))
     } else {
-      sim$validationResults <- runWave1(sim$validationELFs, minHa = scoredMinHa(P(sim)), nBoot = P(sim)$nBoot, nNull = P(sim)$nNull,
-                                        nPerm = P(sim)$nPerm, seed = P(sim)$seed)
-      summ <- summariseGates(sim$validationResults$gates)
-      pl <- stats::setNames(lapply(sim$validationELFs, elfPlots, label = P(sim)$simLabel, minHa = scoredMinHa(P(sim))),
-                            vapply(sim$validationELFs, `[[`, "", "elf"))
-      for (e in sim$validationELFs)
-        Plots(data = e, fn = plotELFPanel, summary = summ, label = P(sim)$simLabel, minHa = scoredMinHa(P(sim)), plots = pl[[e$elf]],
-              filename = paste0("panel_", gsub(".", "_", e$elf, fixed = TRUE)), ggsaveArgs = panelSize) # Plots() takes ".3" of "11.3" as an extension
-      Plots(data = summ, fn = plotOverview, filename = "overview", ggsaveArgs = overviewSize)
-      for (m in names(metrics))
-        Plots(data = pl, fn = plotMetricPanel, summary = summ, metric = m,
-              filename = paste0("metric_", m), ggsaveArgs = metricSize(length(pl)))
+      if (!all(is.na(P(sim)$.plots))) {                                  # the figures are built only when they are drawn
+        summ <- summariseGates(sim$validationResults$gates)
+        pl <- stats::setNames(lapply(sim$validationELFs, elfPlots, label = P(sim)$simLabel, minHa = scoredMinHa(P(sim))),
+                              vapply(sim$validationELFs, `[[`, "", "elf"))
+        for (e in sim$validationELFs)
+          Plots(data = e, fn = plotELFPanel, summary = summ, label = P(sim)$simLabel, minHa = scoredMinHa(P(sim)), plots = pl[[e$elf]],
+                filename = paste0("panel_", gsub(".", "_", e$elf, fixed = TRUE)), ggsaveArgs = panelSize) # Plots() takes ".3" of "11.3" as an extension
+        Plots(data = summ, fn = plotOverview, filename = "overview", ggsaveArgs = overviewSize)
+        for (m in names(metrics))
+          Plots(data = pl, fn = plotMetricPanel, summary = summ, metric = m,
+                filename = paste0("metric_", m), ggsaveArgs = metricSize(length(pl)))
+      }
       out <- outputPath(sim); dir.create(out, recursive = TRUE, showWarnings = FALSE)
       saveRDS(sim$validationResults, file.path(out, "wave1.rds"))
       utils::write.csv(sim$validationResults$results, file.path(out, "wave1_results.csv"), row.names = FALSE)
-      if (P(sim)$bySet)
-        utils::write.csv(do.call(rbind, lapply(sim$validationELFs, scoreBySet, nBoot = P(sim)$nBoot, seed = P(sim)$seed)),
-                         file.path(out, "wave1_bySet.csv"), row.names = FALSE)
+      if (P(sim)$bySet) utils::write.csv(sim$bySetResults, file.path(out, "wave1_bySet.csv"), row.names = FALSE)
       buildValidationPage(sim$validationELFs, sim$validationResults$gates, file.path(out, "validation.html"),
                           template = file.path(modulePath(sim), currentModule(sim), "pageTemplate.html"),
                           title = P(sim)$pageTitle, subtitle = P(sim)$pageSubtitle, label = P(sim)$simLabel,
