@@ -91,7 +91,7 @@ anovaCells <- function(long, factors) {
 }
 
 #' Stacked percent of the sum of squares per metric
-#' @param terms `terms` of [runAnova()]: `metric`, `term`, `pctSS`. @param baseSize Base font size of the theme.
+#' @param terms `terms` of [computeAnova()]: `metric`, `term`, `pctSS`. @param baseSize Base font size of the theme.
 #' @return A ggplot.
 plotAnova <- function(terms, baseSize = 15) {
   lv <- unique(terms$term)
@@ -100,26 +100,21 @@ plotAnova <- function(terms, baseSize = 15) {
     labs(x = NULL, y = "% of total sum of squares (sequential)") + theme_bw(base_size = baseSize)
 }
 
-#' Read the score folders, partition the variation of each metric and write the tables
+#' Partition the variation of each metric of the scores
 #'
-#' @param scores,factors,metrics See [readAnovaScores()]. @param outDir Folder of the two csv files.
-#' @return List: `terms` (`metric`, then [anovaTerms()]), `cells` ([anovaCells()]), `long` (the values analysed), invisibly. Written: `anova_terms.csv`, `anova_cells.csv`.
-runAnova <- function(scores, factors, metrics = NULL, outDir) {
-  res <- computeAnova(scores, factors, metrics)
-  writeAnova(res, outDir)
-  invisible(res)
-}
-
-## the terms, cells and long scores of `runAnova()`, written nowhere
-computeAnova <- function(scores, factors, metrics = NULL) {
-  long <- readAnovaScores(scores, factors, metrics)
+#' @param long [readAnovaScores()] table.
+#' @return List: `terms` (`metric`, then [anovaTerms()]), `cells` ([anovaCells()]), `long` (the values analysed).
+computeAnova <- function(long) {
   fac <- setdiff(names(long), c("arm", "ELF", "metric", "value"))
   terms <- do.call(rbind, lapply(unique(long$metric), function(m) cbind(metric = m, anovaTerms(long[long$metric == m, ], fac))))
   rownames(terms) <- NULL
   list(terms = terms, cells = anovaCells(long, fac), long = long)
 }
 
-## anova_terms.csv and anova_cells.csv of a `computeAnova()` result
+#' Write the two tables of [computeAnova()]
+#'
+#' @param res A [computeAnova()] result. @param outDir Folder of the two csv files.
+#' @return `res`, invisibly. Written: `anova_terms.csv`, `anova_cells.csv`.
 writeAnova <- function(res, outDir) {
   dir.create(outDir, recursive = TRUE, showWarnings = FALSE)
   utils::write.csv(res$terms, file.path(outDir, "anova_terms.csv"), row.names = FALSE)

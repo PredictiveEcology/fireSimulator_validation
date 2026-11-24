@@ -57,35 +57,37 @@ test_that("a skill loss is maximised", {
   expect_equal(out$losses$weightId[out$losses$selected], 2L)
 })
 
-test_that("the module runs mode 'weights' from the three files and writes the report and the tuning rows", {
+test_that("the tables of the three files are read, tuned and written as the report, the tuning rows and the losses", {
   d <- mkWeightsToy(); root <- withr::local_tempdir()
   write.csv(d$terms, file.path(root, "spreadFitTerms_x.csv"), row.names = FALSE)
   write.csv(d$bySet, file.path(root, "wave1_bySet.csv"), row.names = FALSE)
   write.csv(grid3, file.path(root, "grid.csv"), row.names = FALSE)
-  out <- runWeights(file.path(root, "spreadFitTerms_x.csv"), file.path(root, "wave1_bySet.csv"), file.path(root, "grid.csv"),
-                    outDir = root, tuneELFs = c("a", "b"), reportELFs = "c")
+  w <- readWeightsTables(file.path(root, "spreadFitTerms_x.csv"), file.path(root, "wave1_bySet.csv"), file.path(root, "grid.csv"))
+  expect_null(w$tuneBySet)
+  writeWeights(tuneWeights(w$terms, w$bySet, w$grid, tuneELFs = c("a", "b"), reportELFs = "c"), root)
   expect_true(all(file.exists(file.path(root, c("weights_report.csv", "weights_tuning.csv", "weights_losses.csv")))))
   expect_equal(read.csv(file.path(root, "weights_report.csv"))$member, 8L)
 })
 
-test_that("module parameter mode = 'weights' reads the files and writes the tables, without a hindcast", {
+test_that("module parameter mode = 'weights' reads the files and writes the tables, without a hindcast, also when init is a cache hit; a changed bySet file is not a hit", {
   skip_if_not_installed("SpaDES.core")
   d <- mkWeightsToy(); root <- withr::local_tempdir(); out <- file.path(root, "outputs"); dir.create(out)
   write.csv(d$terms, file.path(root, "terms.csv"), row.names = FALSE); write.csv(d$bySet, file.path(out, "wave1_bySet.csv"), row.names = FALSE)
   write.csv(grid3, file.path(root, "grid.csv"), row.names = FALSE)
-  mp <- file.path(root, "modules"); dir.create(mp)
-  file.symlink(normalizePath(testthat::test_path("..", "..")), file.path(mp, "fireSimulator_validation"))
-  withr::local_options(spades.useRequire = FALSE, spades.moduleCodeChecks = FALSE)
-  go <- function() SpaDES.core::simInitAndSpades(times = list(start = 0, end = 1), modules = "fireSimulator_validation",
-    params = list(fireSimulator_validation = list(mode = "weights", weightsTerms = file.path(root, "terms.csv"), weightsGrid = file.path(root, "grid.csv"),
-                                                  weightsTuneELFs = c("a", "b"), weightsReportELFs = "c", .plots = NA, .useCache = TRUE)),
-    paths = list(modulePath = mp, outputPath = out, inputPath = root, cachePath = file.path(root, "cache"), scratchPath = file.path(root, "scratch")))
+  tables <- file.path(out, c("weights_report.csv", "weights_tuning.csv", "weights_losses.csv"))
+  go <- function() runModule(root, list(mode = "weights", weightsTerms = file.path(root, "terms.csv"), weightsGrid = file.path(root, "grid.csv"),
+                                        weightsTuneELFs = c("a", "b"), weightsReportELFs = "c", .plots = NA, .useCache = TRUE))
   go()                                                                   # fills the cache
-  unlink(file.path(out, c("weights_report.csv", "weights_tuning.csv", "weights_losses.csv")))
+  unlink(tables)
   go()                                                                   # init is a cache hit: writeOutputs still writes the tables
-  expect_true(all(file.exists(file.path(out, c("weights_report.csv", "weights_tuning.csv", "weights_losses.csv")))))
+  expect_true(all(file.exists(tables)))
   expect_equal(read.csv(file.path(out, "weights_report.csv"))$member, 8L)
   expect_false(file.exists(file.path(out, "wave1.rds")))
+  d$bySet$area_ratio <- 1; write.csv(d$bySet, file.path(out, "wave1_bySet.csv"), row.names = FALSE)   # same paths, other content
+  n <- nCached(root)
+  sim <- go()
+  expect_gt(nCached(root), n)                                            # a miss
+  expect_true(all(sim$weightsResults$report$area_ratio == 1))
 })
 
 ## a terms file as fireSense_spreadFit writes it: member, rep, parameters, terms; no ELF column; the ELF is in the run name

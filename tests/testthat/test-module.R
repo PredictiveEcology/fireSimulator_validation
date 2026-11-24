@@ -37,20 +37,12 @@ toyHindcastFiles <- function(e, root) {
 }
 
 ## Run the module on toyElf()'s hindcast; `...` are further module parameters.
-runToyModule <- function(root, e, hc, ...) {
-  mp <- file.path(root, "modules"); dir.create(mp, showWarnings = FALSE)
-  link <- file.path(mp, "fireSimulator_validation")
-  if (!file.exists(link)) file.symlink(normalizePath(testthat::test_path("..", "..")), link) # the checkout's folder name may differ; a second link would be made inside the checkout
-  withr::local_options(spades.useRequire = FALSE, spades.moduleCodeChecks = FALSE, .local_envir = parent.frame())
-  SpaDES.core::simInitAndSpades(
-    times = list(start = 0, end = 1), modules = "fireSimulator_validation",
-    params = list(fireSimulator_validation = utils::modifyList(   # `...` may replace inputsPath
-      list(hindcastPath = hc, hindcastYears = sort(unique(e$simYears$year)),
-           inputsPath = file.path(root, "inputs"), ledgerSuffix = "_suffix",
-           nBoot = 20L, nNull = 19L, nPerm = 99L, .plots = "png", pageTitle = "Toy page"), list(...))),
-    paths = list(modulePath = mp, outputPath = file.path(root, "outputs"), inputPath = file.path(root, "inputs"),
-                 cachePath = file.path(root, "cache"), scratchPath = file.path(root, "scratch")))
-}
+runToyModule <- function(root, e, hc, ...)
+  runModule(root, utils::modifyList(   # `...` may replace inputsPath
+    list(hindcastPath = hc, hindcastYears = sort(unique(e$simYears$year)),
+         inputsPath = file.path(root, "inputs"), ledgerSuffix = "_suffix",
+         nBoot = 20L, nNull = 19L, nPerm = 99L, .plots = "png", pageTitle = "Toy page"), list(...)),
+    inputPath = file.path(root, "inputs"), .env = parent.frame())
 
 test_that("the module reads a fireSense hindcast and writes wave1.rds, wave1_results.csv and validation.html to outputPath", {
   skip_if_not_installed("SpaDES.core")
@@ -167,6 +159,40 @@ test_that("a run whose init is a cache hit still writes the page, figures and cs
   expect_true(file.exists(file.path(out, "figures", "fireSimulator_validation", "panel_9_9.png")))
   expect_equal(hit$validationResults, plain$validationResults)
   expect_equal(readRDS(file.path(out, "wave1.rds")), plain$validationResults)
+})
+
+test_that("a user's .neverCache does not make writeOutputs cacheable: a cache hit still writes", {
+  skip_if_not_installed("SpaDES.core")
+  root <- withr::local_tempdir()
+  e <- toyElf(seed = 3, name = "9.9")
+  hc <- toyHindcastFiles(e, root)
+  f <- file.path(root, "outputs", "validation.html")
+  runToyModule(root, e, hc, .useCache = TRUE, .neverCache = ".inputObjects")
+  file.remove(f)
+  runToyModule(root, e, hc, .useCache = TRUE, .neverCache = ".inputObjects")
+  expect_true(file.exists(f))
+})
+
+test_that("the page's title, subtitle, resolution, series label and the plot settings are not in init's cache key: changing them is a hit that rewrites the page", {
+  skip_if_not_installed("SpaDES.core")
+  root <- withr::local_tempdir()
+  e <- toyElf(seed = 3, name = "9.9")
+  hc <- toyHindcastFiles(e, root)
+  runToyModule(root, e, hc, .useCache = TRUE)
+  n <- nCached(root)
+  runToyModule(root, e, hc, .useCache = TRUE, pageTitle = "Other page", pageSubtitle = "sub", pageDpi = 40, simLabel = "other", .plots = NA)
+  expect_equal(nCached(root), n)                                         # no new cache entry: init was a hit
+  expect_match(paste(readLines(file.path(root, "outputs", "validation.html"), warn = FALSE), collapse = "\n"), "<title>Other page</title>", fixed = TRUE)
+})
+
+test_that("with .plots = NA no figure is built or written, and the page and tables still are", {
+  skip_if_not_installed("SpaDES.core")
+  root <- withr::local_tempdir()
+  e <- toyElf(seed = 3, name = "9.9")
+  hc <- toyHindcastFiles(e, root)
+  runToyModule(root, e, hc, .plots = NA)
+  expect_false(dir.exists(file.path(root, "outputs", "figures")))
+  expect_true(all(file.exists(file.path(root, "outputs", c("wave1.rds", "wave1_results.csv", "validation.html")))))
 })
 
 test_that("the module writes the bias rows to wave1_results.csv and the bias table to wave1.rds and validation.html", {

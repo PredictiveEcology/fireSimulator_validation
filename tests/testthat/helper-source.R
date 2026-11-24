@@ -29,3 +29,17 @@ toyElf <- function(name = "toy", perfect = FALSE, seed = 1, scored = seq(1986L, 
        fit = list(objective = c(100, 101, 102), pipelineObjective = c(100.5, 101.5, 99.5, 101), pc = c(0.2, 0.21), p50 = 0.25,
                   fitAreaHa = sum(area), totalAreaHa = sum(area) * 1.2))
 }
+
+## Run the module from a temporary root: `params` are its parameters, outputs go to <root>/outputs. `.env` is where the options are undone.
+runModule <- function(root, params, inputPath = root, .env = parent.frame()) {
+  mp <- file.path(root, "modules"); dir.create(mp, showWarnings = FALSE)
+  link <- file.path(mp, "fireSimulator_validation")
+  if (!file.exists(link)) file.symlink(normalizePath(testthat::test_path("..", "..")), link) # the checkout's folder name may differ; a second link would be made inside the checkout
+  withr::local_options(spades.useRequire = FALSE, spades.moduleCodeChecks = FALSE, .local_envir = .env)
+  SpaDES.core::simInitAndSpades(
+    times = list(start = 0, end = 1), modules = "fireSimulator_validation", params = list(fireSimulator_validation = params),
+    paths = list(modulePath = mp, outputPath = file.path(root, "outputs"), inputPath = inputPath,
+                 cachePath = file.path(root, "cache"), scratchPath = file.path(root, "scratch")))
+}
+## the cache entries (one per cached event run) in <root>/cache
+nCached <- function(root) length(unique(reproducible::showCache(file.path(root, "cache"), verbose = -1)$cacheId))

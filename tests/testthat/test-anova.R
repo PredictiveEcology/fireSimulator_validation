@@ -48,7 +48,7 @@ test_that("an ELF missing from some arms is reported as an aliased interaction",
 ## score folders as mode "score" writes them: wave1_results.csv with level "ELF" rows
 mkScoreFolders <- function(root, d) {
   dirs <- vapply(unique(d$arm), function(a) {
-    x <- d[d$arm == a, ]; f <- file.path(root, paste0("score_", a)); dir.create(f)
+    x <- d[d$arm == a, ]; f <- file.path(root, paste0("score_", a)); dir.create(f, showWarnings = FALSE)
     write.csv(data.frame(test = "S1", null = "N1", level = "ELF", ELF = x$ELF, measure = "skill", value = x$value, lo = NA, hi = NA, nELF = 1L, nUnits = 39L, verdict = NA),
               file.path(f, "wave1_results.csv"), row.names = FALSE); f
   }, "")
@@ -66,16 +66,11 @@ test_that("score folders of one arm in several folders are combined, and a missi
   expect_equal(nrow(readAnovaScores(halves, fac)), nrow(d))
 })
 
-test_that("module parameter mode = 'anova' writes both tables and the figure, without a hindcast", {
+test_that("module parameter mode = 'anova' writes both tables and the figure, without a hindcast, also when init is a cache hit; a changed score file is not a hit", {
   skip_if_not_installed("SpaDES.core")
   d <- mkAnovaToy(); root <- withr::local_tempdir(); out <- file.path(root, "outputs"); dir.create(out)
   sc <- mkScoreFolders(root, d); write.csv(unique(d[c("arm", "A", "B", "C")]), file.path(root, "factors.csv"), row.names = FALSE)
-  mp <- file.path(root, "modules"); dir.create(mp)
-  file.symlink(normalizePath(testthat::test_path("..", "..")), file.path(mp, "fireSimulator_validation"))
-  withr::local_options(spades.useRequire = FALSE, spades.moduleCodeChecks = FALSE)
-  go <- function() SpaDES.core::simInitAndSpades(times = list(start = 0, end = 1), modules = "fireSimulator_validation",
-    params = list(fireSimulator_validation = list(mode = "anova", anovaScores = sc, anovaFactors = file.path(root, "factors.csv"), .plots = "png", .useCache = TRUE)),
-    paths = list(modulePath = mp, outputPath = out, inputPath = root, cachePath = file.path(root, "cache"), scratchPath = file.path(root, "scratch")))
+  go <- function() runModule(root, list(mode = "anova", anovaScores = sc, anovaFactors = file.path(root, "factors.csv"), .plots = "png", .useCache = TRUE))
   go()                                                                   # fills the cache
   unlink(list.files(out, full.names = TRUE), recursive = TRUE)           # an empty outputPath
   sim <- go()                                                            # init is a cache hit: writeOutputs still writes the tables and the figure
@@ -86,4 +81,8 @@ test_that("module parameter mode = 'anova' writes both tables and the figure, wi
   expect_equal(sim$anovaResults$terms$pctSS, tm$pctSS, tolerance = 1e-8)
   expect_length(list.files(out, pattern = "^anova.*\\.png$", recursive = TRUE), 1)
   expect_false(file.exists(file.path(out, "wave1.rds")))
+  d$value[d$A == "a2"] <- 0                                              # A no longer has an effect: same paths, other content
+  mkScoreFolders(root, d) |> invisible()
+  sim2 <- go()
+  expect_lt(sim2$anovaResults$terms$pctSS[sim2$anovaResults$terms$term == "A"], 50)
 })
