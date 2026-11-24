@@ -43,6 +43,31 @@ test_that("no covariate: no result; years without fire are left out of a slope, 
   expect_null(scoreClimateResponse(e)); expect_null(climateTable(list(e)))
   e <- climToy(); e$simYears$area50[e$simYears$run == 1 & e$simYears$year > 1987] <- 0
   cr <- scoreClimateResponse(e); expect_equal(cr$nRuns[1], 5L); expect_equal(cr$ratio[1], 1)   # the median of the other runs; the NA run is left out
+  ## fewer than 3 years with fire: the run's slope is NA, and so is the ELF's when every run has so few
+  e$simYears$area50[e$simYears$year > 1987] <- 0
+  cr <- scoreClimateResponse(e); expect_true(is.na(cr$simMedian[1]) && is.na(cr$ratio[1])); expect_true(all(is.finite(cr$ratio[2:3])))
+})
+
+test_that("an observed slope of 0 gives an NA slope ratio, the area ratios stay", {
+  e <- climToy(); e$obsYears$area50 <- 100                                     # constant observed area: slope exactly 0
+  cr <- scoreClimateResponse(e)
+  expect_equal(cr$observed[1], 0, tolerance = 1e-12); expect_true(is.na(cr$ratio[1])); expect_true(all(is.finite(cr$ratio[2:3])))
+})
+
+test_that("a run missing scored years does not error: the missing years count as no area", {
+  e <- climToy(); miss <- e$simYears$run == 2 & e$simYears$year %in% c(1990, 2000)
+  e$simYears <- e$simYears[!miss, ]
+  cr <- scoreClimateResponse(e)
+  expect_equal(cr$nRuns[1], 5L); expect_true(all(is.finite(cr$ratio)))
+  expect_lte(cr$runLo[2], 1); expect_equal(cr$runHi[2], 1)                      # run 2 has less area in the driest and wetter years it lacks
+  expect_true(all(c("obsRank", "nNonFinite") %in% names(cr)))
+})
+
+test_that("the single-run summary is bootRuns()'s: the range and the observed rank", {
+  single <- rbind(a = c(0.5, 1, 2, 4), b = c(1, 1, 1, 1))
+  rs <- runSummary(single)
+  expect_equal(rs$runLo, unname(c(quantile(c(0.5, 1, 2, 4), 0.025), 1))); expect_equal(unname(rs$obsRank), c(0.375, 0.5))
+  cr <- scoreClimateResponse(climToy(nRuns = 9L, f = function(r) r)); expect_equal(cr$obsRank[2], 1 / 9 * (0 + 0.5))   # one run (r = 1) at the observed, none below
 })
 
 test_that("pooled: the median of the ELF ratios with their range; the rows are in runWave1()'s results as test C", {

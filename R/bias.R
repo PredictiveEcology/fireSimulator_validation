@@ -53,16 +53,16 @@ scoreBias <- function(elf, nBoot = 1000, seed = 1) {
 #'   for the largest fires), `nRuns` is NA, `nYears` the sum, `obsRank` the median of the ELF values.
 poolBias <- function(bias) {
   do.call(rbind, lapply(unique(bias$quantity), function(q) {
-    x <- bias[bias$quantity == q, , drop = FALSE]; tot <- q != "top10"; med <- function(v) stats::median(v[is.finite(v)])
-    r <- x$ratio[is.finite(x$ratio)]
+    x <- bias[bias$quantity == q, , drop = FALSE]; tot <- q != "top10"; med <- medFinite
+    pr <- poolRatios(x)
     data.frame(level = "pooled", ELF = "all", quantity = q, observed = if (tot) sum(x$observed) else NA_real_, simMedian = if (tot) sum(x$simMedian) else NA_real_,
-               ratio = med(x$ratio), log2ratio = med(x$log2ratio), lo = NA_real_, hi = NA_real_, runLo = NA_real_, runHi = NA_real_,
-               elfLo = if (length(r)) min(r) else NA_real_, elfHi = if (length(r)) max(r) else NA_real_, nELF = nrow(x), nNonFinite = sum(!is.finite(x$ratio)), ratioOfSums = if (tot) zeroSafeRatio(sum(x$simMedian), sum(x$observed)) else NA_real_,
+               ratio = pr$ratio, log2ratio = med(x$log2ratio), lo = NA_real_, hi = NA_real_, runLo = NA_real_, runHi = NA_real_,
+               elfLo = pr$elfLo, elfHi = pr$elfHi, nELF = pr$nELF, nNonFinite = pr$nNonFinite, ratioOfSums = if (tot) zeroSafeRatio(sum(x$simMedian), sum(x$observed)) else NA_real_,
                simMean = if (tot) sum(x$simMean) else NA_real_, meanRatio = if (tot) med(x$meanRatio) else NA_real_,
                meanLo = if (tot && any(is.finite(x$meanRatio))) min(x$meanRatio[is.finite(x$meanRatio)]) else NA_real_,
                meanHi = if (tot && any(is.finite(x$meanRatio))) max(x$meanRatio[is.finite(x$meanRatio)]) else NA_real_,
                meanRatioOfSums = if (tot) zeroSafeRatio(sum(x$simMean), sum(x$observed)) else NA_real_,
-               obsRank = med(x$obsRank), nRuns = NA_integer_, nYears = sum(x$nYears), per1000yr = if (tot) sum(x$per1000yr) else NA_real_,
+               obsRank = pr$obsRank, nRuns = NA_integer_, nYears = pr$nYears, per1000yr = if (tot) sum(x$per1000yr) else NA_real_,
                unit = unname(biasUnits[q]))
   }))
 }
@@ -81,8 +81,7 @@ biasTable <- function(elfs, nBoot = 1000, seed = 1) {
 ## are the single-run range (ELF rows) or the range over ELFs (pooled rows)
 biasResultRows <- function(bias) {
   pooled <- bias$level == "pooled"
-  rows <- function(m, x, p, lo, hi) data.frame(test = "B", null = x$quantity, level = x$level, ELF = x$ELF, measure = m, value = x[[m]], lo = lo, hi = hi,
-                                                nELF = x$nELF, nUnits = ifelse(p, x$nYears, x$nRuns), verdict = NA_character_)
+  rows <- function(m, x, p, lo, hi) longRows(x, "B", x$quantity, m, x[[m]], lo, hi)
   r <- function(m, x, p) rows(m, x, p, ifelse(p, x$elfLo, x$runLo), ifelse(p, x$elfHi, x$runHi))
   l2 <- r("ratio", bias, pooled); l2$measure <- "log2ratio"; l2$value <- bias$log2ratio; l2$lo <- log2(l2$lo); l2$hi <- log2(l2$hi)
   tot <- bias[bias$quantity != "top10", ]; tp <- tot$level == "pooled"   # the mean-run ratio of the totals; a single run's range is the same for the mean
@@ -93,12 +92,11 @@ biasResultRows <- function(bias) {
 ## is `c(ratio, low, high, obsRank)`, low and high the range of single runs (ELF rows) or over ELFs (pooled); `<q>Diff` is the total's per1000yr
 biasPageRows <- function(bias) {
   if (is.null(bias)) return(list())
-  cell <- function(x, pooled) ratioCell(x$ratio, if (pooled) x$elfLo else x$runLo, if (pooled) x$elfHi else x$runHi, x$obsRank)
   rowOf <- function(label, x, pooled, sums = FALSE) {
     r <- list(elf = label)
     for (q in names(biasQuantities)) {
       z <- x[x$quantity == q, ]
-      r[[q]] <- if (sums) ratioCell(z$ratioOfSums, NA, NA, NA) else cell(z, pooled)
+      r[[q]] <- if (sums) ratioCell(z$ratioOfSums, NA, NA, NA) else rangeCell(z, pooled)
       if (q != "top10") {
         r[[paste0(q, "Mean")]] <- if (sums) ratioCell(z$meanRatioOfSums, NA, NA, NA) else ratioCell(z$meanRatio, if (pooled) z$meanLo else z$runLo, if (pooled) z$meanHi else z$runHi, NA)
         r[[paste0(q, "Diff")]] <- signif(z$per1000yr, 3)

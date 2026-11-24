@@ -6,48 +6,48 @@ climateMetrics <- c(slope = "climate slope", dry10 = "driest 10% of years", wetH
 
 #' Climate response of one ELF
 #'
-#' Three ratios of the simulated to the observed record over the scored years, each computed for every run alone:
+#' Three ratios of the simulated to the observed record over the scored years, each computed for every run alone. Area is `area50` (fires of the escape size or
+#' more, as the area row of the page); a year a run (or the record) lacks counts as no area. The covariate (`elf$covariate`, higher = drier) is standardised over the scored years,
+#' so the observed slope is per standard deviation of the covariate over the scored years.
 #' \itemize{
-#'   \item `slope`: the slope of log annual area burned (`area50`, years with fire only) on the standardised climate covariate; sim / obs.
-#'   \item `dry10`: the area burned in the driest 10% of the scored years (covariate at or above its 90% quantile); sim / obs.
+#'   \item `slope`: the slope of log annual area burned on the standardised covariate, years with fire only; sim / obs.
+#'   \item `dry10`: the area burned in the driest 10% of the scored years (years at or above the 90% quantile of the covariate over the scored years); sim / obs.
 #'   \item `wetHalf`: the area burned in the wetter half of the scored years (covariate at or below its median); sim / obs.
 #' }
-#' The area ratios use [zeroSafeRatio()]. A slope is NA with fewer than 3 years with fire, and a ratio of slopes is NA when the observed slope is 0 or NA.
+#' The area ratios use [zeroSafeRatio()]. A slope is NA with fewer than 3 years with fire, and a ratio of slopes is NA when the observed slope is 0 (to within 1.5e-8) or NA. The single runs are summarised by [runSummary()].
 #'
 #' @param elf An ELF input list ([runWave1()]); without a `covariate` of the scored years there is no result (`NULL`).
 #' @return `data.frame`, one row per metric: `level` ("ELF"), `ELF`, `metric`, `observed` (the observed slope, or area in ha), `simMedian` (median over runs of the run's value), `ratio` (median over runs of the
-#'   run's ratio to the observed), `runLo`, `runHi` (2.5% and 97.5% of the single runs' ratio), `elfLo`, `elfHi` (NA here), `nELF` (1), `nRuns`, `nYears`.
+#'   run's ratio to the observed), `runLo`, `runHi` (2.5% and 97.5% of the single runs' ratio), `obsRank` (share of runs below the observed), `elfLo`, `elfHi` (NA here), `nELF` (1), `nNonFinite` (0), `nRuns`, `nYears`.
 scoreClimateResponse <- function(elf) {
-  years <- sort(unique(elf$simYears$year))
-  cv <- elf$covariate$value[match(years, elf$covariate$year)]
+  years <- scoredYears(elf)
+  cv <- covariateOf(elf, years)
   if (is.null(elf$covariate) || anyNA(cv) || length(years) < 3 || stats::sd(cv) == 0) return(NULL)
   z <- (cv - mean(cv)) / stats::sd(cv)
   dry <- z >= stats::quantile(z, 0.9); wet <- z <= stats::median(z)
-  slopeOf <- function(area) { k <- area > 0; if (sum(k) < 3) NA_real_ else unname(stats::coef(stats::lm(log(area[k]) ~ z[k]))[2]) }
-  values <- function(area) c(slope = slopeOf(area), dry10 = sum(area[dry]), wetHalf = sum(area[wet]))   # area: per scored year, in `years` order
-  obs <- values(elf$obsYears$area50[match(years, elf$obsYears$year)])
-  ratioTo <- function(v) c(slope = if (isTRUE(obs[["slope"]] != 0)) v[["slope"]] / obs[["slope"]] else NA_real_,
+  slopeOf <- function(area) { k <- !is.na(area) & area > 0; if (sum(k) < 3) NA_real_ else unname(stats::coef(stats::lm(log(area[k]) ~ z[k]))[2]) }
+  values <- function(area) c(slope = slopeOf(area), dry10 = sum(area[dry], na.rm = TRUE), wetHalf = sum(area[wet], na.rm = TRUE))   # area: per scored year, in `years` order
+  obs <- values(obsBy(elf, "area50", years))
+  ratioTo <- function(v) c(slope = if (isTRUE(abs(obs[["slope"]]) > sqrt(.Machine$double.eps))) v[["slope"]] / obs[["slope"]] else NA_real_,
                            dry10 = zeroSafeRatio(v[["dry10"]], obs[["dry10"]]), wetHalf = zeroSafeRatio(v[["wetHalf"]], obs[["wetHalf"]]))
   runs <- lapply(split(elf$simYears, elf$simYears$run), function(r) values(r$area50[match(years, r$year)]))
-  v <- do.call(rbind, runs); rt <- t(vapply(runs, ratioTo, numeric(3)))
-  qs <- function(x, p) { x <- x[is.finite(x)]; if (length(x)) unname(stats::quantile(x, p)) else NA_real_ }
+  v <- do.call(rbind, runs); single <- vapply(runs, ratioTo, numeric(3)); rs <- runSummary(single)
   data.frame(level = "ELF", ELF = elf$elf, metric = names(climateMetrics), observed = unname(obs), simMedian = apply(v, 2, stats::median, na.rm = TRUE),
-             ratio = apply(rt, 2, qs, 0.5), runLo = apply(rt, 2, qs, 0.025), runHi = apply(rt, 2, qs, 0.975),
-             elfLo = NA_real_, elfHi = NA_real_, nELF = 1L, nRuns = length(runs), nYears = length(years), row.names = NULL)
+             ratio = apply(single, 1, medFinite), runLo = rs$runLo, runHi = rs$runHi, obsRank = rs$obsRank,
+             elfLo = NA_real_, elfHi = NA_real_, nELF = 1L, nNonFinite = 0L, nRuns = length(runs), nYears = length(years), row.names = NULL)
 }
 
 #' Climate response of every ELF, and pooled
 #'
-#' @param elfs List of ELF inputs ([runWave1()]). @return The rows of [scoreClimateResponse()] of every ELF with a covariate, then per metric a pooled row (`level` "pooled", `ELF` "all"):
-#'   `ratio` the median over ELFs of the ELF ratios, `elfLo`, `elfHi` their range, `nELF` the ELFs with a finite ratio. `NULL` when no ELF has a covariate.
+#' @param elfs List of ELF inputs ([runWave1()]). @return The rows of [scoreClimateResponse()] of every ELF with a covariate, then per metric a pooled row (`level` "pooled", `ELF` "all") from [poolRatios()]:
+#'   `ratio` the median over ELFs of the ELF ratios, `elfLo`, `elfHi` their range, `nELF` the ELFs, `nNonFinite` those left out as not finite. `NULL` when no ELF has a covariate.
 climateTable <- function(elfs) {
   x <- do.call(rbind, lapply(elfs, scoreClimateResponse))
   if (is.null(x)) return(NULL)
   pooled <- do.call(rbind, lapply(names(climateMetrics), function(m) {
-    r <- x$ratio[x$metric == m & is.finite(x$ratio)]
-    data.frame(level = "pooled", ELF = "all", metric = m, observed = NA_real_, simMedian = NA_real_, ratio = if (length(r)) stats::median(r) else NA_real_,
-               runLo = NA_real_, runHi = NA_real_, elfLo = if (length(r)) min(r) else NA_real_, elfHi = if (length(r)) max(r) else NA_real_,
-               nELF = length(r), nRuns = NA_integer_, nYears = sum(x$nYears[x$metric == m]))
+    pr <- poolRatios(x[x$metric == m, ])
+    data.frame(level = "pooled", ELF = "all", metric = m, observed = NA_real_, simMedian = NA_real_, ratio = pr$ratio, runLo = NA_real_, runHi = NA_real_, obsRank = pr$obsRank,
+               elfLo = pr$elfLo, elfHi = pr$elfHi, nELF = pr$nELF, nNonFinite = pr$nNonFinite, nRuns = NA_integer_, nYears = pr$nYears)
   }))
   out <- rbind(x, pooled); rownames(out) <- NULL
   out
@@ -57,17 +57,15 @@ climateTable <- function(elfs) {
 climateResultRows <- function(climate) {
   if (is.null(climate)) return(NULL)
   p <- climate$level == "pooled"
-  data.frame(test = "C", null = climate$metric, level = climate$level, ELF = climate$ELF, measure = "ratio", value = climate$ratio,
-             lo = ifelse(p, climate$elfLo, climate$runLo), hi = ifelse(p, climate$elfHi, climate$runHi), nELF = climate$nELF,
-             nUnits = ifelse(p, climate$nYears, climate$nRuns), verdict = NA_character_)
+  longRows(climate, "C", climate$metric, "ratio", climate$ratio, ifelse(p, climate$elfLo, climate$runLo), ifelse(p, climate$elfHi, climate$runHi))
 }
 
-## the rows of the page's climate table: the median of the ELFs, then one per ELF; each metric is `c(ratio, low, high, NA)` (ratioCell), `obsSlope` the observed slope
+## the rows of the page's climate table: the median of the ELFs, then one per ELF; each metric is a ratio cell, `obsSlope` the observed slope
 climatePageRows <- function(climate) {
   if (is.null(climate)) return(list())
   rowOf <- function(label, x) {
     r <- list(elf = label)
-    for (m in names(climateMetrics)) { z <- x[x$metric == m, ]; p <- z$level == "pooled"; r[[m]] <- ratioCell(z$ratio, if (p) z$elfLo else z$runLo, if (p) z$elfHi else z$runHi, NA) }
+    for (m in names(climateMetrics)) { z <- x[x$metric == m, ]; r[[m]] <- rangeCell(z, z$level == "pooled") }
     r$obsSlope <- signif(x$observed[x$metric == "slope"], 3)
     r
   }
