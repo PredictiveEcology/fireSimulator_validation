@@ -30,9 +30,10 @@ defineModule(sim, list(
                           "recorded as a property of the observed record. Checked against `fireCauses` of the other modules.")),
     defineParameter("minHa", "numeric", NA_real_, 0, NA,
                     "Smallest fire (ha) scored and drawn: escapes, area and sizes of the simulated and observed series. NA: `escapeSizeHa`."),
-    defineParameter(".neverCache", "character", ".inputObjects", NA, NA,
+    defineParameter(".neverCache", "character", c(".inputObjects", "writeOutputs"), NA, NA,
                     paste("Events that are never cached, whatever `.useCache` says (read by SpaDES.core, 3.2.1.9037 or later):",
-                          "`.inputObjects` reads the hindcast files on disk, which the cache key does not hold, so a cached one returns the ELFs of an earlier, unfinished hindcast.")),
+                          "`.inputObjects` reads the hindcast files on disk, which the cache key does not hold, so a cached one returns the ELFs of an earlier, unfinished hindcast.",
+                          "`writeOutputs` writes the figures, wave1 files and validation.html from `validationResults`, which a cached `init` restores without them.")),
     defineParameter(".plots", "character", "screen", NA, NA, "Where the figures go, as for SpaDES.core::Plots(): 'screen', 'png', both, or NA for none."),
     defineParameter(".plotInitialTime", "numeric", 1, NA, NA, "When the figures are drawn on screen; NA for never."),
     ## the fireSense reader: used only when validationELFs is not supplied
@@ -134,6 +135,10 @@ doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
     } else {
       sim$validationResults <- runWave1(sim$validationELFs, minHa = scoredMinHa(P(sim)), nBoot = P(sim)$nBoot, nNull = P(sim)$nNull,
                                         nPerm = P(sim)$nPerm, seed = P(sim)$seed)
+      ## the files are written by `writeOutputs`, not here: a cached init restores only validationResults
+      sim <- scheduleEvent(sim, start(sim), "fireSimulator_validation", "writeOutputs", eventPriority = 6)
+    },
+    writeOutputs = {
       summ <- summariseGates(sim$validationResults$gates)
       pl <- stats::setNames(lapply(sim$validationELFs, elfPlots, label = P(sim)$simLabel, minHa = scoredMinHa(P(sim))),
                             vapply(sim$validationELFs, `[[`, "", "elf"))

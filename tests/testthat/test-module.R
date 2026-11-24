@@ -142,15 +142,31 @@ test_that("where the hindcast is read from and how many cores read it are not in
   out <- file.path(root, "outputs", "wave1.rds")
   runToyModule(root, e, hc, .useCache = "init")
   expect_true(file.exists(out))
-  file.remove(out)                                                       # an init that runs writes it again; a cached one does not
+  file.remove(out)                                                       # writeOutputs writes it again, on a cache hit too
   root2 <- file.path(root, "copy"); dir.create(root2)
   file.copy(file.path(root, c("hindcast", "inputs")), root2, recursive = TRUE)
   sim <- runToyModule(root, e, file.path(root2, "hindcast"), .useCache = "init", inputsPath = file.path(root2, "inputs"),
                       covariatePath = file.path(root2, "hindcast"), nCores = 2L)
-  expect_false(file.exists(out))
+  expect_true(file.exists(out))
   expect_equal(vapply(sim$validationELFs, `[[`, "", "elf"), "9.9")
   p <- SpaDES.core::params(sim)$fireSimulator_validation
   expect_identical(p$nCores, 2L); expect_identical(p$hindcastPath, file.path(root2, "hindcast"))   # a hit keeps the current values
+})
+
+test_that("a run whose init is a cache hit still writes the page, figures and csv into an empty outputPath, and its results equal the uncached run's", {
+  skip_if_not_installed("SpaDES.core")
+  root <- withr::local_tempdir()
+  e <- toyElf(seed = 3, name = "9.9")
+  hc <- toyHindcastFiles(e, root)
+  out <- file.path(root, "outputs")
+  plain <- runToyModule(root, e, hc)                                     # no cache
+  runToyModule(root, e, hc, .useCache = TRUE, bySet = TRUE)              # fills the cache
+  unlink(c(file.path(out, c("wave1.rds", "wave1_results.csv", "wave1_bySet.csv", "validation.html")), file.path(out, "figures")), recursive = TRUE)
+  hit <- runToyModule(root, e, hc, .useCache = TRUE, bySet = TRUE)       # init is restored from the cache
+  for (f in c("wave1.rds", "wave1_results.csv", "wave1_bySet.csv", "validation.html")) expect_true(file.exists(file.path(out, f)), info = f)
+  expect_true(file.exists(file.path(out, "figures", "fireSimulator_validation", "panel_9_9.png")))
+  expect_equal(hit$validationResults, plain$validationResults)
+  expect_equal(readRDS(file.path(out, "wave1.rds")), plain$validationResults)
 })
 
 test_that("the module writes the bias rows to wave1_results.csv and the bias table to wave1.rds and validation.html", {
