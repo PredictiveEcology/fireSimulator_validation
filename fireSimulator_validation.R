@@ -110,7 +110,7 @@ defineModule(sim, list(
     createsOutput("anovaResults", "list", "Mode 'anova': `terms` (per metric and term: df, pctSS, dropOnePctSS, F, p, note), `cells` and `long`, from computeAnova(); the first two are also written to <outputPath>/anova_terms.csv and anova_cells.csv."),
     createsOutput("weightsResults", "list", "Mode 'weights': `report`, `tuning` and `losses`, from tuneWeights(); also written to <outputPath>/weights_report.csv, weights_tuning.csv and weights_losses.csv."),
     createsOutput("bySetResults", "data.frame", "Mode 'score' with bySet: scoreBySet() of every ELF, written to <outputPath>/wave1_bySet.csv. NULL otherwise."),
-    createsOutput("validationResults", "list", "runWave1() result: results, gates, bias, climate, perELF, flagged. Also saved to <outputPath>/wave1.rds, its results table to wave1_results.csv, and the page to validation.html.")
+    createsOutput("validationResults", "list", "runWave1() result: results, gates, bias, climate, slopeSplit, perELF, flagged. Also saved to <outputPath>/wave1.rds, its results table to wave1_results.csv, and the page to validation.html.")
   )
 ))
 
@@ -191,7 +191,7 @@ doEvent.fireSimulator_validation <- function(sim, eventTime, eventType) {
       buildValidationPage(sim$validationELFs, sim$validationResults$gates, file.path(out, "validation.html"),
                           template = file.path(modulePath(sim), currentModule(sim), "pageTemplate.html"),
                           title = P(sim)$pageTitle, subtitle = P(sim)$pageSubtitle, label = P(sim)$simLabel,
-                          minHa = scoredMinHa(P(sim)), dpi = P(sim)$pageDpi, bias = sim$validationResults$bias, climate = sim$validationResults$climate)
+                          minHa = scoredMinHa(P(sim)), dpi = P(sim)$pageDpi, bias = sim$validationResults$bias, climate = sim$validationResults$climate, slopeSplit = sim$validationResults$slopeSplit)
     },
     warning(paste("Undefined event type: '", current(sim)[1, "eventType", with = FALSE],
                   "' in module '", current(sim)[1, "moduleName", with = FALSE], "'", sep = ""))

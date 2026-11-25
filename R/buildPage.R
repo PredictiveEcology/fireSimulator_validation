@@ -13,12 +13,13 @@ ratioCell <- function(ratio, lo, hi, obsRank) round(c(ratio, lo, hi, obsRank), 3
 #' @param elfs List of ELF inputs ([runWave1()]); `elf` is the id shown on the page.
 #' @param gates The `gates` table of [runWave1()] (its `ELF` values are the ids of `elfs`). Only G2, G4 and G6 are used.
 #' @param climate The `climate` table of [runWave1()], for the climate-response table of the page; `NULL`: none.
+#' @param slopeSplit The `slopeSplit` table of [runWave1()], for the table of the climate slope's three parts under the climate table; `NULL`: none.
 #' @param bias The `bias` table of [runWave1()] (per ELF and pooled), for the bias table of the page; `NULL`: no bias table.
 #' @param file Where to write the page. @param template Path of `pageTemplate.html`.
 #' @param title The page title (browser tab and heading). @param subtitle One line under the title. @param label Name of the simulated series in the figures. @param minHa Escape size.
 #' @param dpi Resolution of the inlined figures (80 keeps a 16-ELF page near 9 MB).
 #' @return `file`, invisibly.
-buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa, dpi = 80, bias = NULL, climate = NULL) {
+buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast validation", subtitle = "", label = "simulated", minHa, dpi = 80, bias = NULL, climate = NULL, slopeSplit = NULL) {
   ids <- vapply(elfs, `[[`, "", "elf"); names(elfs) <- ids
   summ <- summariseGates(gates); summ$ELF <- as.character(summ$ELF)
   summ$burnRate <- vapply(elfs[summ$ELF], function(e) e$burnRate %||% NA_real_, 0)      # for elfOrder(); an ELF input without one sorts last
@@ -40,11 +41,13 @@ buildValidationPage <- function(elfs, gates, file, template, title = "Hindcast v
     r })
   biasRows <- biasPageRows(bias)
   climateRows <- climatePageRows(climate)
+  slopeSplitRows <- slopeSplitPageRows(slopeSplit)
   tpl <- paste(readLines(template, warn = FALSE), collapse = "\n")
   fill <- function(pat, val) tpl <<- sub(pat, val, tpl, fixed = TRUE)
   fill("/*ROWS*/[]", as.character(jsonlite::toJSON(rows, auto_unbox = TRUE, na = "null")))
   fill("/*BIAS*/[]", as.character(jsonlite::toJSON(biasRows, auto_unbox = TRUE, na = "null")))
   fill("/*CLIMATE*/[]", as.character(jsonlite::toJSON(climateRows, auto_unbox = TRUE, na = "null")))
+  fill("/*SLOPESPLIT*/[]", as.character(jsonlite::toJSON(slopeSplitRows, auto_unbox = TRUE, na = "null")))
   fill("/*IMG*/{}", as.character(jsonlite::toJSON(img, auto_unbox = TRUE)))
   tpl <- gsub("__OVERVIEW__", overview, tpl, fixed = TRUE)
   tpl <- gsub("__TITLE__", title, tpl, fixed = TRUE)

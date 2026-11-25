@@ -1,15 +1,5 @@
 ## scoreClimateResponse(): slope, dry10 and wetHalf of the simulated annual area over the observed. Toy ELF: see helper-source.R.
 
-## A toy ELF with a known climate response: observed area = exp(5 + b z) in each scored year; run r is `f(r)` times a response `b * s` (slope factor s)
-climToy <- function(b = 0.5, s = 1, f = function(r) 1, nRuns = 5L, years = 1986:2024) {
-  z <- as.numeric(scale(sin(seq_along(years) * 1.7) + seq_along(years) / 40))   # distinct values: no ties at the quantiles
-  obs <- exp(5 + b * z)
-  sim <- do.call(rbind, lapply(seq_len(nRuns), function(r) data.frame(year = years, run = r, ignitions = 1, escapes = 1, area50 = f(r) * exp(5 + b * s * z))))
-  list(elf = "clim", simYears = sim, simSizes = data.frame(year = years, run = 1L, ha = 100),
-       obsYears = data.frame(year = years, ignitions = 1, escapes = 1, area50 = obs), obsSizes = data.frame(year = years, ha = 100),
-       covariate = data.frame(year = years, value = 100 + 20 * z), z = z, obs = obs)
-}
-
 test_that("a simulator with the observed response has a slope difference of 0 and area ratios of 1; a doubled slope has a difference of b", {
   e <- climToy()
   cr <- scoreClimateResponse(e)
@@ -102,7 +92,7 @@ test_that("runWave1() returns the climate table and its rows in results; the pag
   e <- toyElf(seed = 3, name = "a-x"); e2 <- toyElf(seed = 5, name = "b-y")
   r <- runWave1(list(e, e2), minHa = toyMinHa, nBoot = 10, nNull = 5, nPerm = 20)
   expect_equal(sort(unique(r$climate$ELF)), c("a-x", "all", "b-y"))
-  expect_equal(sum(r$results$test == "C"), 9L); expect_equal(unique(r$results$measure[r$results$test == "C" & r$results$null == "slope"]), "difference")
+  expect_equal(sum(r$results$test == "C" & r$results$null %in% names(climateMetrics)), 9L); expect_equal(unique(r$results$measure[r$results$test == "C" & r$results$null == "slope"]), "difference")
   g <- do.call(rbind, lapply(list(e, e2), function(x) cbind(ELF = x$elf, runGates(x, nBoot = 20))))
   f <- tempfile(fileext = ".html")
   buildValidationPage(list(e, e2), g, f, testthat::test_path("..", "..", "pageTemplate.html"), minHa = toyMinHa, dpi = 30, bias = r$bias, climate = r$climate)
