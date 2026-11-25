@@ -285,11 +285,11 @@ function sortableTable(section, body, attr, rowsOf, cellsOf) {
   const mark = bindSort(attr, st, render);
   if (rowsOf.length) render(); else document.getElementById(section).hidden = true;
 }
-const ratioCells = (r, keys, ref = 1) => keys.map(k => ratioCell(r[k], r.elf, k, ref)).join("");
+const ratioCells = (r, keys) => keys.map(k => ratioCell(r[k], r.elf, k, r.ref ? r.ref[k] ?? NaN : 1)).join("");   // r.ref: what each cell is compared with (none: 1; null: nothing)
 const plainCell = v => `<td data-v="${v ?? ""}"><span class="v">${v == null ? "" : v.toLocaleString("en", { maximumSignificantDigits: 3 })}</span></td>`;
 sortableTable("bias", "biasRows", "b", BIAS, r => ratioCells(r, ["area", "top10", "ignitions", "escapes", "areaMean", "ignitionsMean", "escapesMean"])
   + ["areaDiff", "ignitionsDiff", "escapesDiff"].map(k => plainCell(r[k])).join(""));
-sortableTable("climate", "climateRows", "c", CLIMATE, r => ratioCells(r, ["simSlope"], NaN) + plainCell(r.obsSlope) + ratioCells(r, ["slope"], 0) + ratioCells(r, ["dry10", "wetHalf"]));
+sortableTable("climate", "climateRows", "c", CLIMATE, r => ratioCells(r, ["simSlope"]) + plainCell(r.obsSlope) + ratioCells(r, ["slope", "dry10", "wetHalf"]));
 
 function setMetric(m) {
   metric = m; const src = IMG["metric_" + m];

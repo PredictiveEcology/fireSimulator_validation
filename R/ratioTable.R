@@ -3,7 +3,9 @@
 medFinite <- function(v) stats::median(v[is.finite(v)])
 
 ## The range over ELFs: the 2.5% and 97.5% quantiles of the finite values (the same 95% as the range of single runs), NA with none
-elfRange <- function(v) { v <- v[is.finite(v)]; if (length(v)) unname(stats::quantile(v, c(0.025, 0.975))) else c(NA_real_, NA_real_) }
+elfRange <- function(v) quantRange(v[is.finite(v)])
+## The 2.5% and 97.5% quantiles (NAs left out; NA, NA with none): the one place of the 95% range
+quantRange <- function(v) unname(stats::quantile(v, c(0.025, 0.975), na.rm = TRUE))
 
 ## The pooled row of ratios: `x` has one row per ELF with `ratio`, `obsRank` and `nYears`. `ratio`: the median over ELFs of the finite ratios, `elfLo`, `elfHi`: their 2.5-97.5% range (elfRange());
 ## `nELF`: the ELFs, `nNonFinite`: those left out as not finite; `nYears` summed, `obsRank` the median.

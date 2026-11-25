@@ -89,12 +89,13 @@ test_that("pooled: the median of the ELF differences with their 2.5-97.5% range 
   expect_gt(p$elfLo, 0.5); expect_lt(p$elfHi, 1.5)                             # not the extreme ELFs
   rr <- climateResultRows(ct)
   expect_equal(unique(rr$test), "C"); expect_equal(unique(rr$null), c("slope", "dry10", "wetHalf")); expect_equal(nrow(rr), 12L)
-  expect_equal(unique(rr$measure[rr$null == "slope"]), "difference"); expect_equal(unique(rr$measure[rr$null != "slope"]), "ratio")
+  expect_equal(rr$measure[rr$level == "pooled"], unname(climateKind)); expect_equal(unique(rr$measure[rr$null == "slope"]), "difference"); expect_equal(unique(rr$measure[rr$null != "slope"]), "ratio")
   expect_equal(rr$value[rr$level == "pooled" & rr$null == "slope"], 1); expect_equal(rr$hi[rr$level == "pooled" & rr$null == "slope"], p$elfHi)
   pg <- climatePageRows(ct)
   expect_equal(pg[[1]]$elf, "all: median of ELFs"); expect_equal(pg[[1]]$slope[1:3], round(c(1, p$elfLo, p$elfHi), 3)); expect_true(all(is.na(pg[[1]]$simSlope)))
   expect_equal(pg[[2]]$obsSlope, 0.5); expect_equal(pg[[2]]$simSlope[1], 1); expect_equal(pg[[2]]$slope[1], 0.5)
-  expect_equal(names(pg[[2]]), c("elf", "slope", "dry10", "wetHalf", "simSlope", "obsSlope"))
+  expect_equal(names(pg[[2]]), c("elf", "slope", "dry10", "wetHalf", "simSlope", "ref", "obsSlope"))
+  expect_equal(unlist(pg[[2]]$ref[c("slope", "dry10", "wetHalf")]), c(slope = 0, dry10 = 1, wetHalf = 1)); expect_true(is.na(pg[[2]]$ref$simSlope))
 })
 
 test_that("runWave1() returns the climate table and its rows in results; the page has the table", {
