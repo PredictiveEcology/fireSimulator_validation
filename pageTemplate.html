@@ -78,6 +78,7 @@ td a:hover { text-decoration: underline; }
   <nav id="nav" aria-label="Sections">
     <a href="#scores">Scores</a>
     <a href="#bias">Bias</a>
+    <a href="#climate">Climate response</a>
     <a href="#rank">Observed rank</a>
     <a href="#overview">Overview</a>
     <span class="grp">By metric</span>
@@ -134,6 +135,23 @@ td a:hover { text-decoration: underline; }
       <p class="note">Ratio of the median run to the observed record over the scored years; 1 is no bias. The mean columns are the same ratio for the mean over runs (what compounds over a long run; the median is the robust centre). The mean columns have no observed rank. Small numbers: the 95% range of single runs (the "all" row: the range over ELFs); "obs N%": the share of runs below the observed record. Per 1000 yr: how far the median run's total drifts from the observed rate over 1000 years (simulated minus observed; the totals only). "all: median of ELFs" treats every ELF alike; "all: ratio of sums" is dominated by the large ELFs.</p>
     </section>
 
+    <section id="climate">
+      <h2>Climate response <small>does annual area respond to climate as observed does? click a column to sort</small></h2>
+      <div class="tablebox">
+        <table>
+          <thead><tr>
+            <th><button type="button" data-c="elf">ELF</button></th>
+            <th><button type="button" data-c="slope">Slope of log area on climate</button></th>
+            <th><button type="button" data-c="dry10">Driest 10% of years</button></th>
+            <th><button type="button" data-c="wetHalf">Wetter half of years</button></th>
+            <th><button type="button" data-c="obsSlope">Observed slope</button></th>
+          </tr></thead>
+          <tbody id="climateRows"></tbody>
+        </table>
+      </div>
+      <p class="note">Simulated over observed, over the scored years; 1 is the observed response. Slope: of log annual area burned on the year's climate covariate (standardised; higher is drier). Driest 10%: area in the years at or above the 90% quantile of the covariate. Wetter half: area in the years at or below its median. Each ratio is the median of the runs; small numbers are the 95% range of single runs (the "all" row: the range over ELFs); "obs N%": the share of runs the observed is above. Area is the area in fires of the escape size or more, as in the area row above. The observed slope is per standard deviation of the climate covariate over the scored years.</p>
+    </section>
+
     <section id="rank">
       <h2>Observed rank <small>is the observed record a plausible draw from the runs?</small></h2>
       <div class="rankbox"><svg id="rankSvg" role="img" aria-label="Share of runs the observed record is above, per ELF and metric"></svg></div>
@@ -169,6 +187,7 @@ td a:hover { text-decoration: underline; }
 const IMG = /*IMG*/{};
 const ROWS = /*ROWS*/[];
 const BIAS = /*BIAS*/[];
+const CLIMATE = /*CLIMATE*/[];
 const METRICS = [
   ["areaByYear", "Area by year"], ["annualArea", "Annual area"], ["fireSizes", "Fire sizes"],
   ["ignitions", "Ignitions"], ["escapes", "Escapes"]];
@@ -253,20 +272,23 @@ function renderRows() {
 }
 const markScore = bindSort("k", { get k() { return sortK; }, set k(x) { sortK = x; }, get d() { return sortD; }, set d(x) { sortD = x; } }, renderRows);
 
-// Bias table: the same cells (ratioCell), each with data-v
-const biasSort = { k: "elf", d: 1 };
-const BCOLS = ["area", "top10", "ignitions", "escapes", "areaMean", "ignitionsMean", "escapesMean"], DCOLS = ["areaDiff", "ignitionsDiff", "escapesDiff"];
-function renderBias() {
-  const v = r => Array.isArray(r[biasSort.k]) ? r[biasSort.k][0] : r[biasSort.k];
-  document.getElementById("biasRows").innerHTML = sortRows(BIAS, biasSort.k, biasSort.d, v, r => /^all/.test(r.elf)).map(r => {   // the pooled rows stay on top
-    const cells = BCOLS.map(k => ratioCell(r[k], r.elf, k)).join("");
-    const d = DCOLS.map(k => `<td data-v="${r[k] ?? ""}"><span class="v">${r[k] == null ? "" : r[k].toLocaleString("en", { maximumSignificantDigits: 3 })}</span></td>`).join("");
-    return `<tr><td data-v="${r.elf}">${/^all/.test(r.elf) ? r.elf : `<a href="#${slug(r.elf)}">${r.elf}</a>`}</td>${cells}${d}</tr>`;
-  }).join("");
-  markBias();
+// A sortable table of ratio cells (ratioCell, each with data-v): the "all" rows stay on top; `cellsOf(row)` gives the cells after the ELF name; no rows: the section is hidden
+function sortableTable(section, body, attr, rowsOf, cellsOf) {
+  const st = { k: "elf", d: 1 };
+  const render = () => {
+    const v = r => Array.isArray(r[st.k]) ? r[st.k][0] : r[st.k];
+    document.getElementById(body).innerHTML = sortRows(rowsOf, st.k, st.d, v, r => /^all/.test(r.elf)).map(r =>
+      `<tr><td data-v="${r.elf}">${/^all/.test(r.elf) ? r.elf : `<a href="#${slug(r.elf)}">${r.elf}</a>`}</td>${cellsOf(r)}</tr>`).join("");
+    mark();
+  };
+  const mark = bindSort(attr, st, render);
+  if (rowsOf.length) render(); else document.getElementById(section).hidden = true;
 }
-const markBias = bindSort("b", biasSort, renderBias);
-if (BIAS.length) renderBias(); else document.getElementById("bias").hidden = true;
+const ratioCells = (r, keys) => keys.map(k => ratioCell(r[k], r.elf, k)).join("");
+const plainCell = v => `<td data-v="${v ?? ""}"><span class="v">${v == null ? "" : v.toLocaleString("en", { maximumSignificantDigits: 3 })}</span></td>`;
+sortableTable("bias", "biasRows", "b", BIAS, r => ratioCells(r, ["area", "top10", "ignitions", "escapes", "areaMean", "ignitionsMean", "escapesMean"])
+  + ["areaDiff", "ignitionsDiff", "escapesDiff"].map(k => plainCell(r[k])).join(""));
+sortableTable("climate", "climateRows", "c", CLIMATE, r => ratioCells(r, ["slope", "dry10", "wetHalf"]) + plainCell(r.obsSlope));
 
 function setMetric(m) {
   metric = m; const src = IMG["metric_" + m];
