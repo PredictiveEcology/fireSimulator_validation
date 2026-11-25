@@ -132,7 +132,7 @@ td a:hover { text-decoration: underline; }
           <tbody id="biasRows"></tbody>
         </table>
       </div>
-      <p class="note">Ratio of the median run to the observed record over the scored years; 1 is no bias. The mean columns are the same ratio for the mean over runs (what compounds over a long run; the median is the robust centre). The mean columns have no observed rank. Small numbers: the 95% range of single runs (the "all" row: the range over ELFs); "obs N%": the share of runs below the observed record. Per 1000 yr: how far the median run's total drifts from the observed rate over 1000 years (simulated minus observed; the totals only). "all: median of ELFs" treats every ELF alike; "all: ratio of sums" is dominated by the large ELFs.</p>
+      <p class="note">Ratio of the median run to the observed record over the scored years; 1 is no bias. The mean columns are the same ratio for the mean over runs (what compounds over a long run; the median is the robust centre). The mean columns have no observed rank. Small numbers: the 95% range of single runs (the "all" row: the 2.5-97.5% range over ELFs); "obs N%": the share of runs below the observed record. Per 1000 yr: how far the median run's total drifts from the observed rate over 1000 years (simulated minus observed; the totals only). "all: median of ELFs" treats every ELF alike; "all: ratio of sums" is dominated by the large ELFs.</p>
     </section>
 
     <section id="climate">
@@ -141,15 +141,38 @@ td a:hover { text-decoration: underline; }
         <table>
           <thead><tr>
             <th><button type="button" data-c="elf">ELF</button></th>
-            <th><button type="button" data-c="slope">Slope of log area on climate</button></th>
+            <th><button type="button" data-c="simSlope">Simulated slope</button></th>
+            <th><button type="button" data-c="obsSlope">Observed slope</button></th>
+            <th><button type="button" data-c="slope">Difference (sim &minus; obs)</button></th>
             <th><button type="button" data-c="dry10">Driest 10% of years</button></th>
             <th><button type="button" data-c="wetHalf">Wetter half of years</button></th>
-            <th><button type="button" data-c="obsSlope">Observed slope</button></th>
           </tr></thead>
           <tbody id="climateRows"></tbody>
         </table>
       </div>
-      <p class="note">Simulated over observed, over the scored years; 1 is the observed response. Slope: of log annual area burned on the year's climate covariate (standardised; higher is drier). Driest 10%: area in the years at or above the 90% quantile of the covariate. Wetter half: area in the years at or below its median. Each ratio is the median of the runs; small numbers are the 95% range of single runs (the "all" row: the range over ELFs); "obs N%": the share of runs the observed is above. Area is the area in fires of the escape size or more, as in the area row above. The observed slope is per standard deviation of the climate covariate over the scored years.</p>
+      <p class="note">Slopes are in the units of the response: the change in log annual area burned per standard deviation of the ELF's climate covariate over the scored years (higher covariate is drier). Simulated slope: the median over runs. Difference: simulated minus observed, per run, then the median over runs; 0 is the observed response. Driest 10%: simulated over observed area in the years at or above the 90% quantile of the covariate; wetter half: the same for the years at or below its median; 1 is the observed response. Small numbers are the 95% range of single runs (the "all" row: the 2.5-97.5% range over ELFs; it has no simulated or observed slope); "obs N%": the share of runs below the observed. Area is the area in fires of the escape size or more, as in the area row above.</p>
+    </section>
+
+    <section id="climateSplit">
+      <h2>Climate slope by channel <small>which of ignitions, escape rate and fire size carries the difference? click a column to sort</small></h2>
+      <div class="tablebox">
+        <table>
+          <thead><tr>
+            <th><button type="button" data-s="elf">ELF</button></th>
+            <th><button type="button" data-s="simslopeIgnitions">Ignitions: simulated slope</button></th>
+            <th><button type="button" data-s="obsslopeIgnitions">Ignitions: observed slope</button></th>
+            <th><button type="button" data-s="slopeIgnitions">Ignitions: difference (sim &minus; obs)</button></th>
+            <th><button type="button" data-s="simslopeEscapeRate">Escape rate: simulated slope</button></th>
+            <th><button type="button" data-s="obsslopeEscapeRate">Escape rate: observed slope</button></th>
+            <th><button type="button" data-s="slopeEscapeRate">Escape rate: difference (sim &minus; obs)</button></th>
+            <th><button type="button" data-s="simslopeSize">Mean escaped-fire size: simulated slope</button></th>
+            <th><button type="button" data-s="obsslopeSize">Mean escaped-fire size: observed slope</button></th>
+            <th><button type="button" data-s="slopeSize">Mean escaped-fire size: difference (sim &minus; obs)</button></th>
+          </tr></thead>
+          <tbody id="climateSplitRows"></tbody>
+        </table>
+      </div>
+      <p class="note">The slope of log annual area burned on the climate covariate is the sum of three slopes: of log ignitions, of log escape rate (escapes per ignition) and of log mean escaped-fire size (area per escape), per standard deviation of the covariate. The three differences (simulated minus observed, per run, then the median over runs) add up to the total slope difference in the table above. Only years with an ignition, an escape and some area enter, for the observed record and for each run. Small numbers are the 95% range of single runs (the "all" row: the 2.5-97.5% range over ELFs); "obs N%": the share of runs below the observed.</p>
     </section>
 
     <section id="rank">
@@ -188,6 +211,7 @@ const IMG = /*IMG*/{};
 const ROWS = /*ROWS*/[];
 const BIAS = /*BIAS*/[];
 const CLIMATE = /*CLIMATE*/[];
+const SLOPESPLIT = /*SLOPESPLIT*/[];
 const METRICS = [
   ["areaByYear", "Area by year"], ["annualArea", "Annual area"], ["fireSizes", "Fire sizes"],
   ["ignitions", "Ignitions"], ["escapes", "Escapes"]];
@@ -197,8 +221,8 @@ const slug = e => "elf-" + e.replace(/\./g, "_");
 const f2 = v => v.toFixed(2);
 const num = (a, b, d) => a == null || b == null ? (a == null) - (b == null) : d * (a - b);   // a missing value sorts last, whichever way
 // One ratio cell [ratio, low, high, obsRank] (a missing part is left out); `lead` is the row's id for the tooltip. data-v: the value the column sorts on.
-function ratioCell(c, lead, name) {
-  const [m, lo, hi, rk] = c ?? [], out = m != null && lo != null && (hi < 1 || lo > 1);
+function ratioCell(c, lead, name, ref = 1) {   // ref: the value that means the observed (1 for a ratio, 0 for a difference)
+  const [m, lo, hi, rk] = c ?? [], out = m != null && lo != null && (hi < ref || lo > ref);
   const rank = rk == null ? "" : `<span class="rk">obs ${Math.round(rk * 100)}%</span>`;
   const rng = lo == null ? "" : `<span class="r">${f2(lo)}&ndash;${f2(hi)}</span>`;
   const tip = m == null ? "" : ` title="${lead} ${name}: ${f2(m)}${lo == null ? "" : `, single runs ${f2(lo)} to ${f2(hi)}`}${out ? " (observed outside)" : ""}${rk == null ? "" : `; observed above ${Math.round(rk * 100)}% of runs`}"`;
@@ -284,11 +308,12 @@ function sortableTable(section, body, attr, rowsOf, cellsOf) {
   const mark = bindSort(attr, st, render);
   if (rowsOf.length) render(); else document.getElementById(section).hidden = true;
 }
-const ratioCells = (r, keys) => keys.map(k => ratioCell(r[k], r.elf, k)).join("");
+const ratioCells = (r, keys, ref = 1) => keys.map(k => ratioCell(r[k], r.elf, k, ref)).join("");
 const plainCell = v => `<td data-v="${v ?? ""}"><span class="v">${v == null ? "" : v.toLocaleString("en", { maximumSignificantDigits: 3 })}</span></td>`;
 sortableTable("bias", "biasRows", "b", BIAS, r => ratioCells(r, ["area", "top10", "ignitions", "escapes", "areaMean", "ignitionsMean", "escapesMean"])
   + ["areaDiff", "ignitionsDiff", "escapesDiff"].map(k => plainCell(r[k])).join(""));
-sortableTable("climate", "climateRows", "c", CLIMATE, r => ratioCells(r, ["slope", "dry10", "wetHalf"]) + plainCell(r.obsSlope));
+sortableTable("climate", "climateRows", "c", CLIMATE, r => ratioCells(r, ["simSlope"], NaN) + plainCell(r.obsSlope) + ratioCells(r, ["slope"], 0) + ratioCells(r, ["dry10", "wetHalf"]));
+sortableTable("climateSplit", "climateSplitRows", "s", SLOPESPLIT, r => ["Ignitions", "EscapeRate", "Size"].map(m => ratioCells(r, ["simslope" + m], NaN) + plainCell(r["obsslope" + m]) + ratioCells(r, ["slope" + m], 0)).join(""));
 
 function setMetric(m) {
   metric = m; const src = IMG["metric_" + m];

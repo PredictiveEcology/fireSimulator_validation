@@ -61,7 +61,7 @@ test_that("the runner returns the tidy table, gates, per-ELF tables and the flag
   elfs <- list(toyElf("a", perfect = TRUE, seed = 1), toyElf("b", perfect = TRUE, seed = 2), toyElf("c", perfect = FALSE, seed = 3))
   elfs[[3]]$fit$fitAreaHa <- 0                                  # fails G3
   out <- runWave1(elfs, toyMinHa, nBoot = 49, nNull = 29, nPerm = 99)
-  expect_named(out, c("results", "gates", "bias", "climate", "perELF", "flagged"))
+  expect_named(out, c("results", "gates", "bias", "climate", "slopeSplit", "perELF", "flagged"))
   expect_equal(out$flagged, "c")
   expect_equal(nrow(out$gates), 18)
   r <- out$results

@@ -2,11 +2,14 @@
 
 medFinite <- function(v) stats::median(v[is.finite(v)])
 
-## The pooled row of ratios: `x` has one row per ELF with `ratio`, `obsRank` and `nYears`. `ratio`: the median over ELFs of the finite ratios, `elfLo`, `elfHi`: their range;
+## The range over ELFs: the 2.5% and 97.5% quantiles of the finite values (the same 95% as the range of single runs), NA with none
+elfRange <- function(v) { v <- v[is.finite(v)]; if (length(v)) unname(stats::quantile(v, c(0.025, 0.975))) else c(NA_real_, NA_real_) }
+
+## The pooled row of ratios: `x` has one row per ELF with `ratio`, `obsRank` and `nYears`. `ratio`: the median over ELFs of the finite ratios, `elfLo`, `elfHi`: their 2.5-97.5% range (elfRange());
 ## `nELF`: the ELFs, `nNonFinite`: those left out as not finite; `nYears` summed, `obsRank` the median.
 poolRatios <- function(x) {
-  r <- x$ratio[is.finite(x$ratio)]
-  list(ratio = medFinite(x$ratio), elfLo = if (length(r)) min(r) else NA_real_, elfHi = if (length(r)) max(r) else NA_real_,
+  r <- elfRange(x$ratio)
+  list(ratio = medFinite(x$ratio), elfLo = r[1], elfHi = r[2],
        nELF = nrow(x), nNonFinite = sum(!is.finite(x$ratio)), nYears = sum(x$nYears), obsRank = medFinite(x$obsRank))
 }
 
@@ -15,5 +18,5 @@ longRows <- function(x, test, null, measure, value, lo, hi)
   data.frame(test = test, null = null, level = x$level, ELF = x$ELF, measure = measure, value = value, lo = lo, hi = hi,
              nELF = x$nELF, nUnits = ifelse(x$level == "pooled", x$nYears, x$nRuns), verdict = NA_character_)
 
-## A cell of the page's tables: `c(ratio, low, high, obsRank)`, low and high the range of single runs (ELF rows) or over ELFs (pooled)
+## A cell of the page's tables: `c(value, low, high, obsRank)`, low and high the range of single runs (ELF rows) or over ELFs (pooled); `value` is the ratio (or, for a difference, `x$ratio`)
 rangeCell <- function(x, pooled) ratioCell(x$ratio, if (pooled) x$elfLo else x$runLo, if (pooled) x$elfHi else x$runHi, x$obsRank)

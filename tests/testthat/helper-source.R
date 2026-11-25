@@ -30,6 +30,16 @@ toyElf <- function(name = "toy", perfect = FALSE, seed = 1, scored = seq(1986L, 
                   fitAreaHa = sum(area), totalAreaHa = sum(area) * 1.2))
 }
 
+## A toy ELF with a known climate response: observed area = exp(5 + b z) in each scored year; run r is `f(r)` times a response `b * s` (slope factor s)
+climToy <- function(b = 0.5, s = 1, f = function(r) 1, nRuns = 5L, years = 1986:2024) {
+  z <- as.numeric(scale(sin(seq_along(years) * 1.7) + seq_along(years) / 40))   # distinct values: no ties at the quantiles
+  obs <- exp(5 + b * z)
+  sim <- do.call(rbind, lapply(seq_len(nRuns), function(r) data.frame(year = years, run = r, ignitions = 1, escapes = 1, area50 = f(r) * exp(5 + b * s * z))))
+  list(elf = "clim", simYears = sim, simSizes = data.frame(year = years, run = 1L, ha = 100),
+       obsYears = data.frame(year = years, ignitions = 1, escapes = 1, area50 = obs), obsSizes = data.frame(year = years, ha = 100),
+       covariate = data.frame(year = years, value = 100 + 20 * z), z = z, obs = obs)
+}
+
 ## Run the module from a temporary root: `params` are its parameters, outputs go to <root>/outputs. `.env` is where the options are undone.
 runModule <- function(root, params, inputPath = root, .env = parent.frame()) {
   mp <- file.path(root, "modules"); dir.create(mp, showWarnings = FALSE)
