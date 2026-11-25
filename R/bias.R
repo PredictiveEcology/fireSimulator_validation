@@ -43,10 +43,10 @@ scoreBias <- function(elf, nBoot = 1000, seed = 1) {
 
 #' Bias pooled over ELFs
 #'
-#' Two pooled ratios, not the same number. `ratio` is the median over ELFs of the ELF ratios (`elfLo`, `elfHi`: their range, lowest and highest ELF);
+#' Two pooled ratios, not the same number. `ratio` is the median over ELFs of the ELF ratios (`elfLo`, `elfHi`: their 2.5-97.5% range over ELFs);
 #' it treats every ELF alike. ELFs with a ratio that is not finite (nothing observed, something simulated: Inf) are left out of the median and range, and counted: `nELF` is the number of ELFs and `nNonFinite` how many of them were left out. `ratioOfSums` is the sum over ELFs of the median run's total over the sum of the observed totals (NA for the largest
 #' fires, which have no total); large ELFs dominate it. `per1000yr` is the sum over ELFs of the ELFs' differences. The mean-run ratio is pooled the same two ways: `meanRatio` is the median over ELFs of the ELFs' `meanRatio`
-#' (`meanLo`, `meanHi`: their range over ELFs, not a bootstrap interval) and `meanRatioOfSums` the sum of the run-mean totals over the sum of the observed.
+#' (`meanLo`, `meanHi`: their 2.5-97.5% range over ELFs, not a bootstrap interval) and `meanRatioOfSums` the sum of the run-mean totals over the sum of the observed.
 #'
 #' @param bias The rows of [scoreBias()] of several ELFs, bound.
 #' @return `data.frame` with the columns of [scoreBias()], one row per quantity, `level` "pooled" and `ELF` "all". `observed` and `simMedian` are sums over ELFs (NA
@@ -59,8 +59,7 @@ poolBias <- function(bias) {
                ratio = pr$ratio, log2ratio = med(x$log2ratio), lo = NA_real_, hi = NA_real_, runLo = NA_real_, runHi = NA_real_,
                elfLo = pr$elfLo, elfHi = pr$elfHi, nELF = pr$nELF, nNonFinite = pr$nNonFinite, ratioOfSums = if (tot) zeroSafeRatio(sum(x$simMedian), sum(x$observed)) else NA_real_,
                simMean = if (tot) sum(x$simMean) else NA_real_, meanRatio = if (tot) med(x$meanRatio) else NA_real_,
-               meanLo = if (tot && any(is.finite(x$meanRatio))) min(x$meanRatio[is.finite(x$meanRatio)]) else NA_real_,
-               meanHi = if (tot && any(is.finite(x$meanRatio))) max(x$meanRatio[is.finite(x$meanRatio)]) else NA_real_,
+               meanLo = if (tot) elfRange(x$meanRatio)[1] else NA_real_, meanHi = if (tot) elfRange(x$meanRatio)[2] else NA_real_,
                meanRatioOfSums = if (tot) zeroSafeRatio(sum(x$simMean), sum(x$observed)) else NA_real_,
                obsRank = pr$obsRank, nRuns = NA_integer_, nYears = pr$nYears, per1000yr = if (tot) sum(x$per1000yr) else NA_real_,
                unit = unname(biasUnits[q]))
