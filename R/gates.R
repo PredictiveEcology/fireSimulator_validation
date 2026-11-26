@@ -51,10 +51,12 @@ bootRuns <- function(sim, stat, nBoot = 1000, seed = 1) {
 
 ## The spread of single runs, from `single` (one row per statistic, one column per run; a ratio to the observed): 2.5% and 97.5% over the runs
 ## (`runLo`, `runHi`) and the mid-rank percentile of the observed among the runs (`obsRank`, see bootRuns()); non-finite runs are left out.
-runSummary <- function(single) {
-  q <- matrix(apply(single, 1, stats::quantile, c(0.025, 0.975), na.rm = TRUE, names = FALSE), nrow = 2)
-  obsRank <- apply(single, 1, function(x) { x <- x[is.finite(x)]; (sum(x < 1) + 0.5 * sum(x == 1)) / length(x) })
-  list(runLo = q[1, ], runHi = q[2, ], obsRank = obsRank)
+## `at` is the value of a statistic that means the observed (1 for a ratio, 0 for a difference), one per row or one for all.
+runSummary <- function(single, at = 1) {
+  q <- matrix(apply(single, 1, quantRange), nrow = 2)
+  at <- rep_len(at, nrow(single))
+  obsRank <- vapply(seq_len(nrow(single)), function(i) { x <- single[i, ]; x <- x[is.finite(x)]; (sum(x < at[i]) + 0.5 * sum(x == at[i])) / length(x) }, 0)
+  list(runLo = q[1, ], runHi = q[2, ], obsRank = stats::setNames(obsRank, rownames(single)))
 }
 
 ## "value (median-run 95%: lo-hi; single runs 95%: runLo-runHi); observed above X% of N runs" for the detail text

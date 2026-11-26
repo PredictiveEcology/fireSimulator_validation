@@ -48,7 +48,7 @@ test_that("pooled: the median of the ELF ratios with their range, and the ratio 
   tb <- biasTable(list(big, a, c3), nBoot = 20)
   expect_equal(unique(tb$level), c("ELF", "pooled")); expect_equal(sum(tb$level == "pooled"), 4L)
   p <- bq(tb[tb$level == "pooled", ], "area")
-  expect_equal(p$ratio, 2); expect_equal(c(p$elfLo, p$elfHi), c(1, 4))           # median of 1, 2, 4
+  expect_equal(p$ratio, 2); expect_equal(c(p$elfLo, p$elfHi), unname(quantile(c(1, 2, 4), c(0.025, 0.975))))   # median of 1, 2, 4; the 2.5-97.5% range over ELFs, not the extremes
   e <- bq(tb[tb$level == "ELF", ], "area")
   expect_equal(p$ratioOfSums, sum(e$simMedian) / sum(e$observed)); expect_false(isTRUE(all.equal(p$ratioOfSums, p$ratio)))
   expect_equal(p$per1000yr, sum(e$per1000yr)); expect_true(is.na(bq(tb[tb$level == "pooled", ], "top10")$ratioOfSums))
@@ -112,7 +112,7 @@ test_that("the mean-run ratio differs from the median-run ratio for a skewed set
   expect_true(is.na(bq(b, "top10")$meanRatio))
   tb <- biasTable(list(e, scaleSim(toyElf(seed = 5, perfect = TRUE, name = "a"), 3)), nBoot = 20)
   p <- bq(tb[tb$level == "pooled", ], "area"); el <- bq(tb[tb$level == "ELF", ], "area")
-  expect_equal(p$meanRatio, median(el$meanRatio)); expect_equal(c(p$meanLo, p$meanHi), range(el$meanRatio))
+  expect_equal(p$meanRatio, median(el$meanRatio)); expect_equal(c(p$meanLo, p$meanHi), unname(quantile(el$meanRatio, c(0.025, 0.975))))
   expect_equal(p$meanRatioOfSums, sum(el$simMean) / sum(el$observed))
   m <- biasResultRows(tb); m <- m[m$measure == "meanRatio", ]
   expect_equal(sort(unique(m$null)), c("area", "escapes", "ignitions")); expect_equal(m$value[m$level == "ELF" & m$null == "area"], el$meanRatio)
